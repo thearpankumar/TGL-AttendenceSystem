@@ -3,6 +3,27 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+const parseUA = (ua) => {
+  if (!ua) return 'N/A';
+  const lower = ua.toLowerCase();
+  
+  let os = 'Other';
+  if (lower.includes('iphone')) os = 'iPhone';
+  else if (lower.includes('ipad')) os = 'iPad';
+  else if (lower.includes('android')) os = 'Android';
+  else if (lower.includes('windows')) os = 'Windows';
+  else if (lower.includes('macintosh') || lower.includes('mac os')) os = 'macOS';
+  else if (lower.includes('linux')) os = 'Linux';
+  
+  let browser = '';
+  if (lower.includes('firefox')) browser = 'Firefox';
+  else if (lower.includes('chrome') || lower.includes('crios')) browser = 'Chrome';
+  else if (lower.includes('safari') && !lower.includes('chrome')) browser = 'Safari';
+  else if (lower.includes('edge') || lower.includes('edg')) browser = 'Edge';
+  
+  return browser ? `${os} (${browser})` : os;
+};
+
 const SessionDetail = () => {
   const { id } = useParams();
   const [session, setSession] = useState(null);
@@ -66,7 +87,7 @@ const SessionDetail = () => {
       return;
     }
 
-    const headers = ['Roll Number', 'Name', 'Verified', 'Distance (m)', 'Captured At'];
+    const headers = ['Roll Number', 'Name', 'Verified', 'Distance (m)', 'IP Address', 'Network Provider', 'Device', 'Face Detected', 'Captured At'];
     const csvContent = [
       headers.join(','),
       ...attendance.map((a) =>
@@ -75,6 +96,10 @@ const SessionDetail = () => {
           `"${a.studentName}"`,
           a.verified ? 'Yes' : 'No',
           a.distanceFromLocation,
+          a.ipAddress || 'N/A',
+          `"${a.networkProvider || 'N/A'}"`,
+          `"${parseUA(a.userAgent)}"`,
+          a.faceDetected !== false ? 'Yes' : 'No',
           new Date(a.capturedAt).toISOString(),
         ].join(',')
       ),
@@ -191,53 +216,104 @@ const SessionDetail = () => {
           </button>
         </div>
 
-        {attendance.length === 0 ? (
-          <p>No attendance records yet</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Roll No.</th>
-                <th>Name</th>
-                <th>Photo</th>
-                <th>Distance</th>
-                <th>Status</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attendance.map((a) => (
-                <tr key={a._id}>
-                  <td>{a.rollNumber}</td>
-                  <td>{a.studentName}</td>
-                  <td>
-                    <img
-                      src={a.photoUrl}
-                      alt="Student"
-                      style={{
-                        width: '50px',
-                        height: '50px',
-                        objectFit: 'cover',
-                        borderRadius: '4px',
-                      }}
-                    />
-                  </td>
-                  <td>{a.distanceFromLocation}m</td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        a.verified ? 'badge-success' : 'badge-danger'
-                      }`}
-                    >
-                      {a.verified ? 'Verified' : 'Unverified'}
-                    </span>
-                  </td>
-                  <td>{new Date(a.capturedAt).toLocaleTimeString()}</td>
+        {(() => {
+          const ipCounts = {};
+          attendance.forEach((a) => {
+            if (a.ipAddress) {
+              ipCounts[a.ipAddress] = (ipCounts[a.ipAddress] || 0) + 1;
+            }
+          });
+
+          return attendance.length === 0 ? (
+            <p>No attendance records yet</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Roll No.</th>
+                  <th>Name</th>
+                  <th>Photo</th>
+                  <th>Distance</th>
+                  <th>IP Address</th>
+                  <th>Device</th>
+                  <th>Face Check</th>
+                  <th>Status</th>
+                  <th>Time</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {attendance.map((a) => (
+                  <tr key={a._id}>
+                    <td>{a.rollNumber}</td>
+                    <td>{a.studentName}</td>
+                    <td>
+                      <img
+                        src={a.photoUrl}
+                        alt="Student"
+                        style={{
+                          width: '50px',
+                          height: '50px',
+                          objectFit: 'cover',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </td>
+                    <td>{a.distanceFromLocation}m</td>
+                    <td>
+                      <div style={{ fontWeight: '500' }}>{a.ipAddress || 'N/A'}</div>
+                      {a.networkProvider && (
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '2px', wordBreak: 'break-word', maxWidth: '180px' }}>
+                          {a.networkProvider}
+                        </div>
+                      )}
+                      {a.ipAddress && ipCounts[a.ipAddress] > 1 && (
+                        <span
+                          className="badge badge-danger"
+                          style={{
+                            fontSize: '9px',
+                            padding: '2px 4px',
+                            marginTop: '4px',
+                            display: 'inline-block',
+                            backgroundColor: '#dc3545',
+                            color: 'white',
+                          }}
+                        >
+                          ⚠️ Shared ({ipCounts[a.ipAddress]})
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '12px' }} title={a.userAgent}>
+                      {parseUA(a.userAgent)}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          a.faceDetected !== false ? 'badge-success' : 'badge-danger'
+                        }`}
+                        style={{
+                          fontSize: '11px',
+                          padding: '3px 6px',
+                        }}
+                      >
+                        {a.faceDetected !== false ? 'Detected' : 'No Face'}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          a.verified ? 'badge-success' : 'badge-danger'
+                        }`}
+                      >
+                        {a.verified ? 'Verified' : 'Unverified'}
+                      </span>
+                    </td>
+                    <td>{new Date(a.capturedAt).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
     </div>
   );

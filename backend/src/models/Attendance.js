@@ -49,9 +49,19 @@ const attendanceSchema = new mongoose.Schema({
   userAgent: {
     type: String,
   },
+  networkProvider: {
+    type: String,
+  },
+  networkOrg: {
+    type: String,
+  },
   verified: {
     type: Boolean,
     default: false,
+  },
+  faceDetected: {
+    type: Boolean,
+    default: true,
   },
   capturedAt: {
     type: Date,

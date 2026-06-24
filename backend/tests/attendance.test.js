@@ -341,6 +341,41 @@ describe('Attendance Model Edge Cases', () => {
       expect(attendance.verified).toBe(false);
     });
   });
+
+  describe('Face Detection Status', () => {
+    test('should default faceDetected to true', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'Face Default Test',
+        rollNumber: '21CS108',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo130',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 50,
+        verified: true
+      });
+      
+      expect(attendance.faceDetected).toBe(true);
+    });
+
+    test('should store faceDetected as false when passed', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'Face False Test',
+        rollNumber: '21CS109',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo131',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 50,
+        verified: true,
+        faceDetected: false
+      });
+      
+      expect(attendance.faceDetected).toBe(false);
+    });
+  });
   
   describe('Distance Handling', () => {
     test('should store distance correctly', async () => {
@@ -389,6 +424,44 @@ describe('Attendance Model Edge Cases', () => {
       });
       
       expect(attendance.distanceFromLocation).toBe(0);
+    });
+  });
+
+  describe('Network Provider and Org Handling', () => {
+    test('should store networkProvider and networkOrg correctly', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'Network Student',
+        rollNumber: '21CS112',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo134',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 50,
+        verified: true,
+        networkProvider: 'Reliance Jio Infocomm',
+        networkOrg: 'Jio'
+      });
+      
+      expect(attendance.networkProvider).toBe('Reliance Jio Infocomm');
+      expect(attendance.networkOrg).toBe('Jio');
+    });
+
+    test('should default networkProvider and networkOrg to undefined/not present if omitted', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'No Network Info Student',
+        rollNumber: '21CS113',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo135',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 50,
+        verified: true
+      });
+      
+      expect(attendance.networkProvider).toBeUndefined();
+      expect(attendance.networkOrg).toBeUndefined();
     });
   });
   

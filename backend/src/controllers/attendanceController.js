@@ -1,8 +1,17 @@
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
-const Location = require('../models/Location');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
+const svgCaptcha = require('svg-captcha');
+const crypto = require('crypto');
+const config = require('../config');
+
+const signCaptchaText = (text, timestamp) => {
+  return crypto
+    .createHmac('sha256', config.jwtSecret || 'fallback-secret')
+    .update(`${text.toLowerCase()}:${timestamp}`)
+    .digest('hex');
+};
 
 const validateToken = async (req, res) => {
   try {
@@ -79,7 +88,45 @@ const getUploadUrl = async (req, res) => {
 const submitAttendance = async (req, res) => {
   try {
     const { token } = req.params;
-    const { studentName, rollNumber, photo, latitude, longitude, directUpload = false, publicId = null } = req.body;
+    const { 
+      studentName, 
+      rollNumber, 
+      photo, 
+      latitude, 
+      longitude, 
+      directUpload = false, 
+      publicId = null, 
+      faceDetected,
+      captchaAnswer,
+      captchaId
+    } = req.body;
+
+    // Verify Captcha (bypass in testing)
+    if (process.env.NODE_ENV !== 'test') {
+      if (!captchaAnswer || !captchaId) {
+        return res.status(400).json({ message: 'Captcha verification inputs missing' });
+      }
+
+      const parts = captchaId.split('.');
+      if (parts.length !== 2) {
+        return res.status(400).json({ message: 'Invalid Captcha ID format' });
+      }
+
+      const [timestampStr, signature] = parts;
+      const timestamp = parseInt(timestampStr, 10);
+
+      // Check expiry: 5 minutes limit
+      const FIVE_MINUTES_MS = 5 * 60 * 1000;
+      if (isNaN(timestamp) || Date.now() - timestamp > FIVE_MINUTES_MS) {
+        return res.status(400).json({ message: 'Captcha expired. Please refresh and try again.' });
+      }
+
+      // Recompute signature
+      const expectedSignature = signCaptchaText(captchaAnswer, timestamp);
+      if (expectedSignature !== signature) {
+        return res.status(400).json({ message: 'Incorrect captcha. Please try again.' });
+      }
+    }
 
     const tokenHash = Session.hashToken(token);
 
@@ -129,6 +176,7 @@ const submitAttendance = async (req, res) => {
         photoUrl = uploadResult.url;
         photoPublicId = uploadResult.publicId;
       } catch (uploadError) {
+        console.error('Photo upload error details:', uploadError);
         return res.status(400).json({
           message: 'Failed to upload photo',
           error: uploadError.message,
@@ -149,6 +197,32 @@ const submitAttendance = async (req, res) => {
 
     const isWithinGeofence = distance <= session.locationId.radiusMeters;
 
+    let networkProvider = 'Unknown';
+    let networkOrg = 'Unknown';
+
+    const ip = req.ip;
+    if (ip && ip !== '::1' && ip !== '127.0.0.1' && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        
+        const ipRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,isp,org`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.status === 'success') {
+            networkProvider = ipData.isp || 'Unknown';
+            networkOrg = ipData.org || 'Unknown';
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch ISP information:', err.message);
+      }
+    }
+
     const attendance = await Attendance.create({
       sessionId: session._id,
       studentName,
@@ -158,9 +232,12 @@ const submitAttendance = async (req, res) => {
       studentLatitude: latitude,
       studentLongitude: longitude,
       distanceFromLocation: Math.round(distance),
-      ipAddress: req.ip,
+      ipAddress: ip,
       userAgent: req.get('User-Agent'),
+      networkProvider,
+      networkOrg,
       verified: isWithinGeofence,
+      faceDetected: faceDetected !== undefined ? faceDetected : true,
     });
 
     res.status(201).json({
@@ -240,10 +317,37 @@ const getStorageInfo = async (req, res) => {
   }
 };
 
+const getCaptcha = async (req, res) => {
+  try {
+    const captcha = svgCaptcha.create({
+      size: 4,
+      noise: 2,
+      color: true,
+      background: '#f1f1f1',
+    });
+
+    const timestamp = Date.now();
+    const signature = signCaptchaText(captcha.text, timestamp);
+    const captchaId = `${timestamp}.${signature}`;
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    res.json({
+      captchaSvg: captcha.data,
+      captchaId: captchaId,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error generating captcha', error: error.message });
+  }
+};
+
 module.exports = {
   validateToken,
   getUploadUrl,
   submitAttendance,
   checkAttendanceStatus,
   getStorageInfo,
+  getCaptcha,
 };
