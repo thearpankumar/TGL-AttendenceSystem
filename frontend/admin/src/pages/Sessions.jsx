@@ -13,6 +13,9 @@ const Sessions = () => {
     durationMinutes: 30,
     description: '',
   });
+  const [deleteModal, setDeleteModal] = useState({ open: false, sessionId: null, attendanceCount: 0, locationName: '' });
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const abortControllerRef = useRef(null);
 
   const fetchData = useCallback(async () => {
@@ -48,6 +51,18 @@ const Sessions = () => {
     };
   }, [fetchData]);
 
+  const getAttendanceLink = (token) => {
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:${port || 80}/attend/${token}`;
+    }
+    
+    return `${protocol}//${hostname}/attend/${token}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -63,11 +78,10 @@ const Sessions = () => {
       });
 
       const token = res.data.token;
-      const baseUrl = window.location.origin.replace(/:\d+$/, '');
-      const attendanceLink = `${baseUrl}/attend/${token}`;
+      const attendanceLink = getAttendanceLink(token);
 
+      await navigator.clipboard.writeText(attendanceLink).catch(() => {});
       toast.success('Session created! Link copied to clipboard.');
-      navigator.clipboard.writeText(attendanceLink);
 
       setShowModal(false);
       setFormData({ locationId: '', durationMinutes: 30, description: '' });
@@ -85,6 +99,42 @@ const Sessions = () => {
       fetchData();
     } catch (error) {
       toast.error('Failed to deactivate session');
+    }
+  };
+
+  const openDeleteModal = (session) => {
+    setDeleteModal({
+      open: true,
+      sessionId: session._id,
+      attendanceCount: session.attendanceCount,
+      locationName: session.locationId?.name || 'Unknown',
+    });
+    setDeletePassword('');
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({ open: false, sessionId: null, attendanceCount: 0, locationName: '' });
+    setDeletePassword('');
+  };
+
+  const handleDelete = async (e) => {
+    e.preventDefault();
+    if (!deletePassword) {
+      toast.error('Please enter your admin password');
+      return;
+    }
+    setDeleting(true);
+    try {
+      await axios.delete(`/api/admin/sessions/${deleteModal.sessionId}`, {
+        data: { password: deletePassword },
+      });
+      toast.success('Session and all attendance records deleted');
+      closeDeleteModal();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete session');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -153,20 +203,28 @@ const Sessions = () => {
                     <td>{new Date(session.expiresAt).toLocaleString()}</td>
                     <td>{session.attendanceCount}</td>
                     <td>
-                      <Link
-                        to={`/sessions/${session._id}`}
-                        className="btn btn-secondary btn-small"
-                      >
-                        View
-                      </Link>
-                      {session.isActive && !isExpired(session) && (
-                        <button
-                          className="btn btn-danger btn-small"
-                          onClick={() => handleDeactivate(session._id)}
+                      <div className="actions-cell">
+                        <Link
+                          to={`/sessions/${session._id}`}
+                          className="btn btn-secondary btn-small"
                         >
-                          Deactivate
+                          View
+                        </Link>
+                        {session.isActive && !isExpired(session) && (
+                          <button
+                            className="btn btn-danger btn-small"
+                            onClick={() => handleDeactivate(session._id)}
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-delete btn-small"
+                          onClick={() => openDeleteModal(session)}
+                        >
+                          Delete
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -241,6 +299,66 @@ const Sessions = () => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.open && (
+        <div className="modal-overlay" onClick={closeDeleteModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Delete Session</h3>
+              <button className="modal-close" onClick={closeDeleteModal}>&times;</button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ marginBottom: '8px' }}>
+                You are about to permanently delete the session for{' '}
+                <strong>{deleteModal.locationName}</strong>.
+              </p>
+              {deleteModal.attendanceCount > 0 ? (
+                <p style={{ color: '#c0392b', marginBottom: '12px' }}>
+                  ⚠️ This will also delete{' '}
+                  <strong>{deleteModal.attendanceCount} attendance record{deleteModal.attendanceCount !== 1 ? 's' : ''}</strong>{' '}
+                  and all associated photos from Cloudinary. This cannot be undone.
+                </p>
+              ) : (
+                <p style={{ color: '#666', marginBottom: '12px' }}>
+                  This session has no attendance records. It will be permanently deleted.
+                </p>
+              )}
+            </div>
+            <form onSubmit={handleDelete}>
+              <div className="form-group">
+                <label>Confirm with Admin Password</label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your admin password"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="submit"
+                  className="btn btn-danger"
+                  disabled={deleting}
+                  style={{ background: '#c0392b' }}
+                >
+                  {deleting ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeDeleteModal}
+                  disabled={deleting}
                 >
                   Cancel
                 </button>
