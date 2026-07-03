@@ -10,8 +10,324 @@
 [![Coverage](https://img.shields.io/badge/Coverage-Comprehensive-blue)](backend/tests/)
 [![WebAuthn](https://img.shields.io/badge/WebAuthn-Enabled-purple)](https://webauthn.io/)
 
-A production-ready attendance system with GPS geolocation, camera verification, and **WebAuthn biometric authentication** for secure student identity verification.
+A production-ready attendance system with GPS geolocation, camera verification, **WebAuthn biometric authentication**, and **Redis-powered caching** for handling 1000+ concurrent users.
 
+---
+
+## Architecture
+
+### System Architecture (Production - 1000+ Users)
+
+```mermaid
+graph TB
+    Internet[🌍 Internet Users]
+    
+    subgraph "Load Balancer Layer"
+        Caddy[Caddy Reverse Proxy<br/>Automatic SSL<br/>Load Balancing<br/>Port: 80/443]
+    end
+    
+    subgraph "Application Layer - 3 Replicas"
+        Backend1[Backend Container 1<br/>Node.js + PM2<br/>2 Workers]
+        Backend2[Backend Container 2<br/>Node.js + PM2<br/>2 Workers]
+        Backend3[Backend Container 3<br/>Node.js + PM2<br/>2 Workers]
+    end
+    
+    subgraph "Frontend Layer"
+        AdminFE[Admin Panel<br/>React 18<br/>Port: 3000]
+        StudentFE[Student Page<br/>Vanilla JS<br/>Port: 8080]
+    end
+    
+    subgraph "Database Layer"
+        Mongo1[MongoDB Primary<br/>Port: 27017]
+        Mongo2[MongoDB Secondary<br/>Port: 27018]
+        Mongo3[MongoDB Arbiter<br/>Port: 27019]
+    end
+    
+    subgraph "Cache Layer"
+        Redis[Redis Cache<br/>Session Caching<br/>Port: 6379<br/>512MB Memory]
+    end
+    
+    subgraph "External Services"
+        S3[AWS S3<br/>Photo Storage<br/>Direct Upload]
+        Cloudinary[Cloudinary<br/>Image Optimization<br/>Alternative Storage]
+    end
+    
+    Internet -->|HTTPS| Caddy
+    Caddy -->|Round Robin| Backend1
+    Caddy -->|Round Robin| Backend2
+    Caddy -->|Round Robin| Backend3
+    
+    Caddy -->|Static Files| AdminFE
+    Caddy -->|Static Files| StudentFE
+    
+    Backend1 -->|Cache-Aside| Redis
+    Backend2 -->|Cache-Aside| Redis
+    Backend3 -->|Cache-Aside| Redis
+    
+    Backend1 -->|Replica Set| Mongo1
+    Backend2 -->|Replica Set| Mongo1
+    Backend3 -->|Replica Set| Mongo1
+    
+    Mongo1 -.->|Replication| Mongo2
+    Mongo1 -.->|Arbiter| Mongo3
+    
+    Backend1 -->|Presigned URLs| S3
+    Backend2 -->|Presigned URLs| S3
+    Backend3 -->|Presigned URLs| S3
+    
+    Backend1 -.->|Alternative| Cloudinary
+    Backend2 -.->|Alternative| Cloudinary
+    Backend3 -.->|Alternative| Cloudinary
+    
+    style Caddy fill:#4a9eff,stroke:#0066cc,color:#fff
+    style Redis fill:#dc382d,stroke:#a41e11,color:#fff
+    style Mongo1 fill:#47a248,stroke:#2e6b2f,color:#fff
+    style Mongo2 fill:#47a248,stroke:#2e6b2f,color:#fff
+    style Mongo3 fill:#47a248,stroke:#2e6b2f,color:#fff
+    style S3 fill:#ff9900,stroke:#e68a00,color:#fff
+```
+
+### Request Flow Architecture
+
+```mermaid
+sequenceDiagram
+    participant Student as 👨‍🎓 Student
+    participant Caddy as Caddy LB
+    participant Backend as Backend API
+    participant Redis as Redis Cache
+    participant Mongo as MongoDB
+    participant S3 as AWS S3
+    
+    Student->>Caddy: GET /attend/:token
+    Caddy->>Backend: Route to Backend (Round Robin)
+    
+    Backend->>Redis: Check Session Cache
+    
+    alt Cache Hit
+        Redis-->>Backend: Return Cached Session (1-5ms)
+    else Cache Miss
+        Backend->>Mongo: Query Session
+        Mongo-->>Backend: Return Session (10-50ms)
+        Backend->>Redis: Cache Session (TTL: 5min)
+    end
+    
+    Backend-->>Caddy: Return Session Info
+    Caddy-->>Student: Display Attendance Form
+    
+    Student->>Backend: GET /api/attend/:token/upload-url
+    Backend->>S3: Generate Presigned URL
+    S3-->>Backend: Presigned URL (5min expiry)
+    Backend-->>Student: Return Upload URL
+    
+    Student->>S3: PUT Photo (Direct Upload)
+    S3-->>Student: Upload Success
+    
+    Student->>Backend: POST /api/attend/:token<br/>(rollNumber, photoUrl, GPS)
+    
+    Backend->>Backend: Validate GPS Distance
+    Backend->>Mongo: Check Duplicate Roll Number
+    Backend->>Mongo: Save Attendance Record
+    Backend-->>Student: Attendance Submitted ✅
+```
+
+---
+
+## User Workflows
+
+### Admin Workflow
+
+```mermaid
+graph TD
+    Start[🚀 Admin Login] --> Login[JWT Authentication]
+    Login --> Dashboard[📊 Dashboard]
+    
+    Dashboard -->|Manage| Locations[📍 Locations]
+    Dashboard -->|Manage| Sessions[⏰ Sessions]
+    Dashboard -->|Monitor| Attendance[📋 Attendance]
+    Dashboard -->|Manage| Credentials[🔐 Credentials]
+    
+    subgraph "Location Management"
+        Locations --> CreateLoc[Create Location]
+        CreateLoc --> EnterCoords[Enter GPS Coordinates]
+        EnterCoords --> SetRadius[Set Geofence Radius]
+        SetRadius --> SaveLoc[Save Location]
+    end
+    
+    subgraph "Session Management"
+        Sessions --> CreateSess[Create Session]
+        CreateSess --> SelectLoc[Select Location]
+        SelectLoc --> SetDuration[Set Duration]
+        SetDuration --> EnableTOTP{Enable TOTP?}
+        EnableTOTP -->|Yes| GenTOTP[Generate TOTP Secret]
+        EnableTOTP -->|No| GenToken[Generate Session Token]
+        GenTOTP --> GenToken
+        GenToken --> GenLink[Generate Short Link]
+        GenLink --> ShareLink[📤 Share Link/QR Code]
+    end
+    
+    subgraph "Monitoring"
+        Attendance --> ViewLive[View Live Stats]
+        ViewLive --> PollUpdates[Poll Updates 5s]
+        PollUpdates --> ViewVerified[✅ Verified Students]
+        PollUpdates --> ViewFlagged[🚩 Flagged Submissions]
+        PollUpdates --> ExportCSV[📥 Export to CSV]
+    end
+    
+    subgraph "Credential Management"
+        Credentials --> ListCreds[List All Credentials]
+        ListCreds --> SearchRoll[Search by Roll Number]
+        SearchRoll --> ResetCred{Reset Credential?}
+        ResetCred -->|Yes| LogReason[Log Reason + Admin ID]
+        LogReason --> ConfirmReset[Confirm Reset]
+        SearchRoll --> SuspendCred{Suspend?}
+        SuspendCred -->|Yes| LogReason2[Log Reason + Duration]
+        LogReason2 --> ConfirmSuspend[Confirm Suspend]
+    end
+    
+    SaveLoc --> Dashboard
+    ShareLink --> Monitor[👁️ Monitor Session]
+    Monitor --> ViewLive
+    ConfirmReset --> Dashboard
+    ConfirmSuspend --> Dashboard
+    
+    style Start fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style Dashboard fill:#2196F3,stroke:#1565C0,color:#fff
+    style ShareLink fill:#FF9800,stroke:#EF6C00,color:#fff
+    style ViewLive fill:#9C27B0,stroke:#6A1B9A,color:#fff
+```
+
+### Student Workflow
+
+```mermaid
+graph TD
+    Start[📱 Open Attendance Link] --> LoadPage[Load Student Page]
+    LoadPage --> CheckSession{Valid Session?}
+    
+    CheckSession -->|No| Error[❌ Invalid/Expired Link]
+    CheckSession -->|Yes| EnterRoll[Enter Roll Number]
+    
+    EnterRoll --> CheckStatus{Check WebAuthn Status}
+    
+    CheckStatus -->|Not Enrolled| WebAuthnReg[🔐 WebAuthn Registration Flow]
+    CheckStatus -->|Enrolled| WebAuthnAuth[🔓 WebAuthn Authentication Flow]
+    
+    subgraph "WebAuthn Registration"
+        WebAuthnReg --> PromptBio[Browser Prompts: Face ID/Touch ID]
+        PromptBio --> StoreCred[Store Credential in DB]
+        StoreCred --> SuccessReg[✅ Biometric Enrolled]
+    end
+    
+    subgraph "WebAuthn Authentication"
+        WebAuthnAuth --> PromptBioAuth[Browser Prompts: Biometric Verification]
+        PromptBioAuth --> VerifyCounter[Verify Sign Counter]
+        VerifyCounter --> SuccessAuth{Verified?}
+        SuccessAuth -->|No| RetryAuth[Retry Authentication]
+        RetryAuth --> PromptBioAuth
+        SuccessAuth -->|Yes| ContinueFlow[Continue to Form]
+    end
+    
+    SuccessReg --> FillName[Fill Student Name]
+    FillName --> CapturePhoto[📷 Capture Photo]
+    
+    ContinueFlow --> CapturePhoto
+    
+    CapturePhoto --> EnableGPS[📍 Enable GPS Location]
+    EnableGPS --> ValidateGPS{Within Geofence?}
+    
+    ValidateGPS -->|No| ErrorGPS[❌ Too Far from Location<br/>Distance: XXX meters]
+    ValidateGPS -->|Yes| DetectFace{Face Detected?}
+    
+    DetectFace -->|No| ErrorFace[❌ No Face Detected<br/>Please Retake Photo]
+    DetectFace -->|Yes| CheckTOTP{TOTP Required?}
+    
+    CheckTOTP -->|Yes| EnterTOTP[Enter 6-digit TOTP Code]
+    CheckTOTP -->|No| SubmitAtt[✅ Submit Attendance]
+    
+    EnterTOTP --> ValidateTOTP{Valid TOTP?}
+    ValidateTOTP -->|No| ErrorTOTP[❌ Invalid Code]
+    ErrorTOTP --> EnterTOTP
+    ValidateTOTP -->|Yes| SubmitAtt
+    
+    SubmitAtt --> CheckDup{Already Submitted?}
+    CheckDup -->|Yes| ErrorDup[❌ Roll Number Already<br/>Submitted for This Session]
+    CheckDup -->|No| SaveRecord[💾 Save Attendance Record]
+    
+    SaveRecord --> UploadPhotoS3[☁️ Upload Photo to S3]
+    UploadPhotoS3 --> Success[🎉 Attendance Submitted<br/>Successfully!]
+    
+    style Start fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style WebAuthnReg fill:#FF9800,stroke:#EF6C00,color:#fff
+    style WebAuthnAuth fill:#2196F3,stroke:#1565C0,color:#fff
+    style Success fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style ErrorGPS fill:#F44336,stroke:#C62828,color:#fff
+    style ErrorFace fill:#F44336,stroke:#C62828,color:#fff
+```
+
+---
+
+## Data Flow Architecture
+
+```mermaid
+graph LR
+    subgraph "Client Layer"
+        Browser[🌐 Browser]
+        Mobile[📱 Mobile Browser]
+    end
+    
+    subgraph "CDN/Reverse Proxy"
+        Caddy[Caddy<br/>SSL Termination<br/>Gzip Compression]
+    end
+    
+    subgraph "API Gateway"
+        RateLimit[Rate Limiter<br/>Admin: 100/15min<br/>Student: 20/min]
+        Auth[Auth Middleware<br/>JWT Validation]
+    end
+    
+    subgraph "Application Services"
+        SessionService[Session Service<br/>Token Generation<br/>TOTP Management]
+        AttendanceService[Attendance Service<br/>GPS Validation<br/>Photo Verification]
+        WebAuthnService[WebAuthn Service<br/>Credential Management<br/>Challenge Generation]
+        StorageService[Storage Service<br/>S3 Presigned URLs<br/>Cloudinary Upload]
+    end
+    
+    subgraph "Cache Layer"
+        Redis[Redis Cache<br/>Session Data<br/>Location Data<br/>TTL: 5 minutes]
+    end
+    
+    subgraph "Data Layer"
+        MongoDB[(MongoDB<br/>Replica Set<br/>3 Nodes)]
+    end
+    
+    subgraph "Storage Layer"
+        S3[(AWS S3<br/>Photo Storage<br/>Direct Upload)]
+        Cloudinary[(Cloudinary<br/>Image CDN<br/>Transformations)]
+    end
+    
+    Browser -->|HTTPS| Caddy
+    Mobile -->|HTTPS| Caddy
+    Caddy --> RateLimit
+    RateLimit --> Auth
+    Auth --> SessionService
+    Auth --> AttendanceService
+    Auth --> WebAuthnService
+    Auth --> StorageService
+    
+    SessionService -->|Cache-Aside| Redis
+    AttendanceService -->|Cache-Aside| Redis
+    WebAuthnService -->|Cache-Aside| Redis
+    
+    SessionService --> MongoDB
+    AttendanceService --> MongoDB
+    WebAuthnService --> MongoDB
+    
+    StorageService -->|Presigned URLs| S3
+    StorageService -->|Upload API| Cloudinary
+    
+    style Redis fill:#dc382d,stroke:#a41e11,color:#fff
+    style MongoDB fill:#47a248,stroke:#2e6b2f,color:#fff
+    style S3 fill:#ff9900,stroke:#e68a00,color:#fff
+    style Caddy fill:#4a9eff,stroke:#0066cc,color:#fff
+```
 ---
 
 ## Table of Contents
@@ -389,7 +705,7 @@ npx serve -p 8080
 
 ---
 
-## Architecture
+## Security Architecture
 
 ### Request Flow (with WebAuthn)
 
@@ -694,3 +1010,94 @@ Attendence-GEOTAG-System/
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Docker Compose Configurations
+
+### Development vs Production
+
+This project uses **two Docker Compose files** that work together:
+
+#### **docker-compose.yml** (Base Configuration - Production)
+
+The main configuration for **production deployment** with full scaling:
+
+```yaml
+Services:
+- Backend: 3 replicas with PM2 clustering (6 workers total)
+- MongoDB: 3-node replica set (Primary + Secondary + Arbiter)
+- Redis: 512MB cache with LRU eviction
+- Caddy: Load balancer with automatic HTTPS
+- Frontend: Optimized production builds
+```
+
+**When to use:**
+- Production deployment
+- Load testing with 1000+ users
+- High availability setup
+
+#### **docker-compose.override.yml** (Development Overrides)
+
+**Automatically applied** when running `docker-compose up`. Simplifies development:
+
+```yaml
+Services:
+- Backend: 1 replica (easier debugging)
+- Volume mounts: Hot reload enabled
+- No PM2: Standard Node.js process
+- Faster builds: Uses standard Dockerfile
+```
+
+**Key Differences:**
+
+| Feature | Production (Base) | Development (Override) |
+|---------|-------------------|------------------------|
+| Backend Replicas | 3 | 1 |
+| PM2 Workers | 2 per container | None |
+| Hot Reload | ❌ No | ✅ Yes (volume mounts) |
+| MongoDB Nodes | 3 (replica set) | 3 (replica set) |
+| Build Time | Slower (PM2) | Faster (standard) |
+| Debugging | Harder | Easier |
+
+**How to Use:**
+
+```bash
+# Development (automatic - both files merge)
+docker-compose up -d
+
+# Production (explicit - base only)
+docker-compose -f docker-compose.yml up -d --build
+
+# Or set environment variable
+export COMPOSE_FILE=docker-compose.yml
+docker-compose up -d
+```
+
+**Override File Contents:**
+
+```yaml
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile        # Standard Dockerfile (no PM2)
+    deploy:
+      replicas: 1                    # Single replica
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo1:27017/attendance-geotag
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend/src:/app/src:ro   # Hot reload
+```
+
+**Benefits:**
+
+1. **No configuration needed** - Just run `docker-compose up` for development
+2. **Production-ready by default** - Base file has all optimizations
+3. **Easy debugging** - Single backend instance with logs
+4. **Fast iteration** - Volume mounts for instant code changes
+5. **Clean separation** - Dev and prod configs are isolated
+
+---
