@@ -1,5 +1,3 @@
-const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const request = require('supertest');
 const express = require('express');
 const Admin = require('../src/models/Admin');
@@ -12,7 +10,6 @@ const {
 } = require('../src/middleware/validators');
 const { protect } = require('../src/middleware/auth');
 
-let mongoServer;
 let app;
 let admin;
 let adminToken;
@@ -48,23 +45,14 @@ const createAuthApp = () => {
   return testApp;
 };
 
-beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+beforeAll(() => {
   app = createAuthApp();
   
   process.env.JWT_SECRET = 'test-secret-key-for-testing';
   process.env.JWT_EXPIRE = '7d';
 });
 
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
-});
-
 beforeEach(async () => {
-  await Admin.deleteMany({});
-  
   admin = await Admin.create({
     username: 'testadmin',
     email: 'admin@test.com',

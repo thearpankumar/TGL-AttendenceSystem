@@ -59,4 +59,10 @@ module.exports = {
     apiKey: process.env.CLOUDINARY_API_KEY || '',
     apiSecret: process.env.CLOUDINARY_API_SECRET || '',
   },
+  
+  webauthn: {
+    rpName: process.env.WEBAUTHN_RP_NAME || 'SentriX Attendance System',
+    rpID: process.env.WEBAUTHN_RP_ID || 'localhost',
+    origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:5000',
+  },
 };

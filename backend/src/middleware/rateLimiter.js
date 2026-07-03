@@ -1,10 +1,13 @@
 const rateLimit = require('express-rate-limit');
 
+const isTest = process.env.NODE_ENV === 'test';
+
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => isTest,
   message: {
     message: 'Too many requests, please try again later',
   },
@@ -16,6 +19,7 @@ const studentLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipFailedRequests: true,
+  skip: () => isTest,
   message: {
     message: 'Too many submissions, please wait',
   },
@@ -26,6 +30,7 @@ const loginLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => isTest,
   message: {
     message: 'Too many login attempts, please try again later',
   },

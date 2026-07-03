@@ -13,9 +13,11 @@ const app = express();
 // on every request that passes through nginx (all ngrok traffic), aborting them.
 app.set('trust proxy', 1);
 
-connectDB();
-
-initializeStorage(config.storage);
+// Only connect to DB if not in test environment (tests handle their own connection)
+if (config.nodeEnv !== 'test') {
+  connectDB();
+  initializeStorage(config.storage);
+}
 
 app.use(helmet({
   contentSecurityPolicy: false,        // CSP on API JSON responses causes issues with browser module scripts behind ngrok
@@ -51,6 +53,8 @@ app.get('/api/storage-info', (req, res) => {
 
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/attend', require('./routes/studentRoutes'));
+app.use('/s', require('./routes/shortLinkRoutes'));
+app.use('/s', require('./routes/webauthnRoutes'));
 
 app.use((req, res, _next) => {
   res.status(404).json({ message: 'Route not found' });
@@ -65,10 +69,13 @@ app.use((err, req, res, _next) => {
   });
 });
 
-const PORT = config.port;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${config.nodeEnv}`);
-});
+// Only start listening if not in test environment
+if (config.nodeEnv !== 'test') {
+  const PORT = config.port;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${config.nodeEnv}`);
+  });
+}
 
 module.exports = app;

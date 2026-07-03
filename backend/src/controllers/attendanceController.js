@@ -2,6 +2,7 @@ const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
+const { validateTOTPCode } = require('../utils/totpUtils');
 const svgCaptcha = require('svg-captcha');
 const crypto = require('crypto');
 const config = require('../config');
@@ -98,7 +99,9 @@ const submitAttendance = async (req, res) => {
       publicId = null, 
       faceDetected,
       captchaAnswer,
-      captchaId
+      captchaId,
+      totpCode,
+      deviceFingerprint,
     } = req.body;
 
     // Verify Captcha (bypass in testing)
@@ -147,6 +150,39 @@ const submitAttendance = async (req, res) => {
         message: 'Location not found for this session',
       });
     }
+
+    // TOTP validation for sessions with TOTP enabled
+    let totpValid = null;
+    if (session.totpEnabled) {
+      if (!totpCode) {
+        return res.status(400).json({ 
+          message: 'This session requires a time-based code. Please scan the QR code or enter the current code.',
+          totpRequired: true,
+        });
+      }
+      
+      const totpResult = validateTOTPCode(
+        totpCode,
+        session.totpSecret,
+        session._id.toString(),
+        session.totpWindowSeconds,
+        1 // 1 window tolerance
+      );
+      
+      totpValid = totpResult.valid;
+      
+      if (!totpValid) {
+        return res.status(400).json({ 
+          message: 'Invalid or expired code. Please get the current code and try again.',
+          totpRequired: true,
+          totpValid: false,
+        });
+      }
+    }
+
+    // Device fingerprint validation
+    const deviceValidation = req.deviceValidation || { valid: true, firstSeen: false };
+    const deviceFingerprintHash = deviceValidation.fingerprintHash || null;
 
     const existingAttendance = await Attendance.findOne({
       sessionId: session._id,
@@ -238,10 +274,21 @@ const submitAttendance = async (req, res) => {
       networkOrg,
       verified: isWithinGeofence,
       faceDetected: faceDetected !== undefined ? faceDetected : true,
+      deviceFingerprint: deviceFingerprint,
+      deviceFingerprintHash: deviceFingerprintHash,
+      deviceFirstSeen: deviceValidation.firstSeen,
+      deviceFlag: deviceValidation.deviceFlag || null,
+      totpCode: totpCode || null,
+      totpValid: totpValid,
+      flagReviewed: false,
     });
 
+    const responseMessage = deviceValidation.flags && deviceValidation.flags.length > 0
+      ? 'Attendance submitted successfully. Note: Device flagged for review.'
+      : 'Attendance submitted successfully';
+
     res.status(201).json({
-      message: 'Attendance submitted successfully',
+      message: responseMessage,
       attendance: {
         _id: attendance._id,
         studentName: attendance.studentName,
@@ -249,7 +296,12 @@ const submitAttendance = async (req, res) => {
         distanceFromLocation: attendance.distanceFromLocation,
         verified: attendance.verified,
         capturedAt: attendance.capturedAt,
+        deviceFirstSeen: attendance.deviceFirstSeen,
+        deviceFlag: attendance.deviceFlag,
       },
+      deviceWarning: deviceValidation.flags && deviceValidation.flags.length > 0 
+        ? deviceValidation.flags 
+        : null,
     });
   } catch (error) {
     if (error.code === 11000) {

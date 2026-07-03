@@ -1,28 +1,8 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const Admin = require('../src/models/Admin');
 const Location = require('../src/models/Location');
 const Session = require('../src/models/Session');
 const Attendance = require('../src/models/Attendance');
-
-let mongoServer;
-
-beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
-});
-
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
-});
-
-afterEach(async () => {
-  await Admin.deleteMany({});
-  await Location.deleteMany({});
-  await Session.deleteMany({});
-  await Attendance.deleteMany({});
-});
 
 describe('Admin Model', () => {
   test('should create admin with hashed password', async () => {

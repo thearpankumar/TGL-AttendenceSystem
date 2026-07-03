@@ -2,7 +2,10 @@ const Session = require('../models/Session');
 const Location = require('../models/Location');
 const Attendance = require('../models/Attendance');
 const Admin = require('../models/Admin');
+const ShortLink = require('../models/ShortLink');
+const Device = require('../models/Device');
 const { getStorageProvider } = require('../storage');
+const { generateTOTPWithTimestamp } = require('../utils/totpUtils');
 
 const createSession = async (req, res) => {
   try {
@@ -31,6 +34,7 @@ const createSession = async (req, res) => {
       description,
       createdBy: req.admin._id,
       expiresAt,
+      totpEnabled: false,
     });
 
     res.status(201).json({
@@ -42,6 +46,7 @@ const createSession = async (req, res) => {
       description: session.description,
       expiresAt: session.expiresAt,
       isActive: session.isActive,
+      totpEnabled: session.totpEnabled,
       createdAt: session.createdAt,
     });
   } catch (error) {
@@ -256,6 +261,115 @@ const deleteSession = async (req, res) => {
   }
 };
 
+const getSessionTOTP = async (req, res) => {
+  try {
+    const session = await Session.findOne({
+      _id: req.params.id,
+      createdBy: req.admin._id,
+    });
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    if (!session.totpEnabled) {
+      return res.status(400).json({ message: 'TOTP not enabled for this session' });
+    }
+
+    const shortLink = await ShortLink.findOne({ sessionId: session._id, isActive: true });
+
+    const totpData = generateTOTPWithTimestamp(
+      session.totpSecret,
+      session._id.toString(),
+      session.totpWindowSeconds
+    );
+
+    res.json({
+      sessionId: session._id,
+      totpCode: totpData.code,
+      expiresAt: totpData.expiresAt,
+      windowSeconds: totpData.windowSeconds,
+      shortLink: shortLink ? shortLink.shortCode : null,
+      sessionActive: session.isActive,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getFlaggedAttendance = async (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    const query = { 
+      deviceFlag: { $ne: null },
+      sessionId: sessionId ? sessionId : { $exists: true }
+    };
+    
+    if (sessionId) {
+      const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
+      if (!session) {
+        return res.status(404).json({ message: 'Session not found' });
+      }
+    }
+    
+    const flaggedAttendance = await Attendance.find(query)
+      .populate('sessionId', 'description expiresAt isActive')
+      .sort({ capturedAt: -1 });
+    
+    res.json(flaggedAttendance);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const reviewAttendanceFlag = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewed } = req.body;
+    
+    const attendance = await Attendance.findById(id).populate('sessionId');
+    
+    if (!attendance) {
+      return res.status(404).json({ message: 'Attendance record not found' });
+    }
+    
+    if (!attendance.deviceFlag) {
+      return res.status(400).json({ message: 'This record has no flags to review' });
+    }
+    
+    attendance.flagReviewed = reviewed;
+    attendance.flagReviewedBy = req.admin._id;
+    attendance.flagReviewedAt = new Date();
+    
+    await attendance.save();
+    
+    res.json({ 
+      message: reviewed ? 'Flag marked as reviewed' : 'Flag review removed',
+      attendance 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getDevicesForSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+    
+    const devices = await Device.find({ sessionId })
+      .sort({ lastSeenAt: -1 });
+    
+    res.json(devices);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   createSession,
   getSessions,
@@ -265,4 +379,8 @@ module.exports = {
   getSessionAttendance,
   getSessionStats,
   deleteSession,
+  getSessionTOTP,
+  getFlaggedAttendance,
+  reviewAttendanceFlag,
+  getDevicesForSession,
 };

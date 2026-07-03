@@ -3,6 +3,8 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const locationController = require('../controllers/locationController');
 const sessionController = require('../controllers/sessionController');
+const shortLinkController = require('../controllers/shortLinkController');
+const webauthnController = require('../controllers/webauthnController');
 const { protect } = require('../middleware/auth');
 const {
   validateAdmin,
@@ -34,5 +36,24 @@ router.post('/sessions/:id/deactivate', sessionController.deactivateSession);
 router.delete('/sessions/:id', sessionController.deleteSession);
 router.get('/sessions/:id/attendance', sessionController.getSessionAttendance);
 router.get('/sessions/:id/stats', sessionController.getSessionStats);
+router.get('/sessions/:id/totp', sessionController.getSessionTOTP);
+router.get('/sessions/:id/devices', sessionController.getDevicesForSession);
+
+router.get('/flagged', sessionController.getFlaggedAttendance);
+router.patch('/attendance/:id/review', sessionController.reviewAttendanceFlag);
+
+router.post('/shortlinks', shortLinkController.createShortLink);
+router.get('/shortlinks', shortLinkController.getShortLinks);
+router.get('/shortlinks/available-sessions', shortLinkController.getAvailableSessions);
+router.get('/shortlinks/:shortCode', shortLinkController.getShortLinkByCode);
+router.post('/shortlinks/:shortCode/attach', shortLinkController.attachShortLinkToSession);
+router.post('/shortlinks/:shortCode/detach', shortLinkController.detachShortLink);
+router.delete('/shortlinks/:shortCode', shortLinkController.deleteShortLink);
+
+router.post('/webauthn/reset', webauthnController.resetCredential);
+router.post('/webauthn/suspend', webauthnController.suspendCredential);
+router.post('/webauthn/unsuspend', webauthnController.unsuspendCredential);
+router.get('/webauthn/credentials', webauthnController.getCredentials);
+router.get('/webauthn/stats', webauthnController.getWebAuthnStats);
 
 module.exports = router;

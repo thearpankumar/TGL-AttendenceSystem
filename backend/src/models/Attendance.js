@@ -63,6 +63,79 @@ const attendanceSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  deviceFingerprint: {
+    type: String,
+    default: null,
+  },
+  deviceFingerprintHash: {
+    type: String,
+    default: null,
+  },
+  deviceFirstSeen: {
+    type: Boolean,
+    default: false,
+  },
+  totpCode: {
+    type: String,
+    default: null,
+  },
+  totpValid: {
+    type: Boolean,
+    default: null,
+  },
+  deviceFlag: {
+    type: String,
+    enum: [
+      null,
+      'MULTI_STUDENT_DEVICE',
+      'STUDENT_DEVICE_SWITCHED',
+      'RAPID_SUBMISSION',
+      'DEVICE_FINGERPRINT_CHANGE',
+      'WEBAUTHN_REPLAY_ATTACK',
+      'WEBAUTHN_NOT_SUPPORTED',
+      'WEBAUTHN_CREDENTIAL_SUSPENDED'
+    ],
+    default: null,
+  },
+  webauthnCredentialId: {
+    type: String,
+    default: null,
+  },
+  webauthnVerified: {
+    type: Boolean,
+    default: false,
+  },
+  webauthnDeviceType: {
+    type: String,
+    enum: [null, 'face_id', 'touch_id', 'fingerprint', 'passkey_fallback', 'unknown'],
+    default: null,
+  },
+  webauthnAuthenticatorAttachment: {
+    type: String,
+    enum: [null, 'platform', 'cross-platform'],
+    default: null,
+  },
+  webauthnCounter: {
+    type: Number,
+    default: null,
+  },
+  webauthnReplayAttack: {
+    type: Boolean,
+    default: false,
+  },
+  flagReviewed: {
+    type: Boolean,
+    default: false,
+  },
+  flagReviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null,
+  },
+  flagReviewedAt: {
+    type: Date,
+    default: null,
+  },
   capturedAt: {
     type: Date,
     default: Date.now,
@@ -72,5 +145,8 @@ const attendanceSchema = new mongoose.Schema({
 attendanceSchema.index({ sessionId: 1, rollNumber: 1 }, { unique: true });
 attendanceSchema.index({ sessionId: 1, capturedAt: -1 });
 attendanceSchema.index({ sessionId: 1, verified: 1 });
+attendanceSchema.index({ deviceFlag: 1, flagReviewed: 1 });
+attendanceSchema.index({ deviceFingerprintHash: 1 });
+attendanceSchema.index({ webauthnVerified: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

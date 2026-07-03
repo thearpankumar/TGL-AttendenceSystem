@@ -1,36 +1,20 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const Admin = require('../src/models/Admin');
 const Location = require('../src/models/Location');
 const Session = require('../src/models/Session');
 const Attendance = require('../src/models/Attendance');
 
-let mongoServer;
-
-beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
-  
+beforeAll(() => {
   process.env.STORAGE_PROVIDER = 'cloudinary';
   process.env.CLOUDINARY_CLOUD_NAME = 'test';
   process.env.CLOUDINARY_API_KEY = 'test';
   process.env.CLOUDINARY_API_SECRET = 'test';
 });
 
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
-});
-
 describe('Attendance Model Edge Cases', () => {
   let admin, location, session;
   
   beforeEach(async () => {
-    await Admin.deleteMany({});
-    await Location.deleteMany({});
-    await Session.deleteMany({});
-    await Attendance.deleteMany({});
-    
     admin = await Admin.create({
       username: 'testadmin',
       email: 'admin@test.com',
