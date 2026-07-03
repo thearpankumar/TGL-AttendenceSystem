@@ -88,7 +88,7 @@ async function getSessionStats(tokenHash) {
       ttl: ttl > 0 ? ttl : 0,
       source: exists === 1 ? 'cache' : 'database'
     };
-  } catch (error) {
+  } catch (_error) {
     return { cached: false, source: 'database' };
   }
 }
