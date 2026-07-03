@@ -2,13 +2,13 @@ name: CodeQL Security Analysis
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'backend/**/*.js'
       - 'frontend/admin/src/**/*.{js,jsx}'
       - '.github/workflows/codeql.yml'
   pull_request:
-    branches: [main]
+    branches: [master]
     paths:
       - 'backend/**/*.js'
       - 'frontend/admin/src/**/*.{js,jsx}'

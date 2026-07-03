@@ -139,10 +139,18 @@ async function init() {
         return;
     }
 
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        showError('This page requires a secure connection (HTTPS) to access your location. Please use the secure link provided.');
+    const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '[::1]';
+    const isSecure = location.protocol === 'https:' || isLocalhost;
+    
+    if (!isSecure) {
+        showError('⚠ HTTPS Required\n\nGeolocation and Camera require a secure connection (HTTPS).\n\nIf you\'re accessing this from a phone:\n1. Ask your administrator for the HTTPS link\n2. Or use http://localhost from a computer\n\nCurrent URL: ' + location.href);
         return;
     }
+
+    console.log('[Init] Starting attendance flow...');
+    console.log('[Init] Protocol:', location.protocol);
+    console.log('[Init] Hostname:', location.hostname);
+    console.log('[Init] Is secure context:', window.isSecureContext);
 
     try {
         const storageRes = await apiFetch(`${API_BASE}/api/storage-info`);
@@ -168,9 +176,16 @@ async function init() {
 
         showView(formView);
         loadCaptcha();
+        
+        console.log('[Init] Initializing geolocation...');
         await initGeolocation();
+        
+        console.log('[Init] Initializing camera...');
         await initCamera();
+        
+        console.log('[Init] All systems ready');
     } catch (error) {
+        console.error('[Init] Error:', error);
         showError('Failed to load attendance page. Please check your internet connection.');
     }
 }
@@ -187,8 +202,17 @@ async function initGeolocation() {
             return;
         }
 
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 60000,
+            maximumAge: 0
+        };
+
+        console.log('[Geolocation] Requesting position with options:', options);
+
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                console.log('[Geolocation] Position received:', position.coords);
                 userLocation = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
@@ -196,7 +220,7 @@ async function initGeolocation() {
                 };
                 gpsStatus.className = 'gps-status gps-ok';
                 gpsStatus.innerHTML = `
-                    <span>Location Detected</span>
+                    <span>✓ Location Detected</span>
                     <small>Accuracy: ${Math.round(position.coords.accuracy)} meters</small>
                     <div class="coords-display">${userLocation.latitude.toFixed(6)}, ${userLocation.longitude.toFixed(6)}</div>
                     <div class="place-name-display" id="placeNameDisplay">Fetching place name...</div>
@@ -204,38 +228,47 @@ async function initGeolocation() {
                 checkFormValidity();
                 resolve();
 
-                // Fetch place name from Nominatim (async, non-blocking)
                 fetchPlaceName(userLocation.latitude, userLocation.longitude).then(name => {
                     const el = document.getElementById('placeNameDisplay');
                     if (el) el.textContent = name || 'Place name unavailable';
                 });
             },
             (error) => {
+                console.error('[Geolocation] Error:', error.code, error.message);
                 let msg = 'Unknown error occurred.';
                 let instructions = 'Please refresh the page and try again.';
                 
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
-                        msg = 'Location Permission Denied';
-                        instructions = 'You must allow location access to mark attendance. Click the lock/info icon in your browser address bar, enable location permissions, and refresh this page.';
+                        msg = '⚠ Location Permission Denied';
+                        instructions = 'You must allow location access to mark attendance. Instructions:\n\n';
+                        instructions += '📱 iPhone/iPad: Settings > Privacy & Security > Location Services > Safari > Allow\n';
+                        instructions += '📱 Android: Settings > Apps > Chrome/Safari > Permissions > Location > Allow\n';
+                        instructions += 'Or tap the lock/info icon in your browser address bar, enable location, and refresh.';
                         break;
                     case error.POSITION_UNAVAILABLE:
-                        msg = 'Location Unavailable';
-                        instructions = 'GPS signal could not be obtained. Please ensure Location/GPS is enabled on your device and try again outdoors.';
+                        msg = '⚠ Location Unavailable';
+                        instructions = 'GPS signal could not be obtained. Please:\n';
+                        instructions += '1. Enable Location/GPS in device settings\n';
+                        instructions += '2. Try outdoors for better GPS signal\n';
+                        instructions += '3. Ensure no VPN/proxy is blocking location';
                         break;
                     case error.TIMEOUT:
-                        msg = 'Location Timeout';
-                        instructions = 'Location request timed out. Please try again in an open area with better GPS signal.';
+                        msg = '⚠ Location Timeout';
+                        instructions = 'Location request timed out. Please:\n';
+                        instructions += '1. Check if GPS/Location is enabled\n';
+                        instructions += '2. Move to an open area\n';
+                        instructions += '3. Refresh and try again';
                         break;
                     default:
-                        msg = 'Location Error';
+                        msg = '⚠ Location Error';
                         instructions = 'An unknown error occurred. Please refresh and try again.';
                 }
                 
                 gpsStatus.className = 'gps-status gps-error';
                 gpsStatus.innerHTML = `
                     <span>${msg}</span>
-                    <small>${instructions}</small>
+                    <small style="white-space: pre-line;">${instructions}</small>
                 `;
                 
                 const retryBtn = document.getElementById('retryLocationBtn');
@@ -246,28 +279,56 @@ async function initGeolocation() {
                 checkFormValidity();
                 resolve();
             },
-            {
-                enableHighAccuracy: true,
-                timeout: 30000,
-                maximumAge: 0
-            }
+            options
         );
     });
 }
 
 async function initCamera() {
     try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: 640, height: 480 }
-        });
+        console.log('[Camera] Requesting camera access...');
+        
+        const constraints = {
+            video: {
+                facingMode: 'user',
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        };
+        
+        console.log('[Camera] Constraints:', constraints);
+        
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        console.log('[Camera] Stream obtained:', mediaStream.getTracks());
+        
         video.srcObject = mediaStream;
+        
+        video.onloadedmetadata = () => {
+            console.log('[Camera] Video metadata loaded:', video.videoWidth, 'x', video.videoHeight);
+            video.play().catch(err => console.warn('[Camera] Autoplay failed:', err));
+        };
+        
     } catch (error) {
-        if (error.name === 'NotAllowedError') {
-            showError('Camera access denied. Please enable camera permissions in your browser settings and refresh the page.');
-        } else if (error.name === 'NotFoundError') {
-            showError('No camera found on this device. A camera is required for attendance verification.');
+        console.error('[Camera] Error:', error.name, error.message);
+        
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+            showError('⚠ Camera Permission Denied\n\nTo enable camera:\n\n📱 iPhone: Settings > Safari > Camera > Allow\n📱 Android: Settings > Apps > Browser > Permissions > Camera > Allow\n\nOr tap the lock icon in your address bar and enable camera permissions, then refresh.');
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+            showError('⚠ No Camera Found\n\nNo camera detected on this device. A camera is required for attendance verification.');
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+            showError('⚠ Camera In Use\n\nCamera is being used by another application. Please close other apps using the camera and refresh.');
+        } else if (error.name === 'OverconstrainedError') {
+            console.warn('[Camera] Constraints not met, trying fallback...');
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = mediaStream;
+            } catch (fallbackError) {
+                showError('Camera access required. Please enable camera permissions and refresh.');
+            }
         } else {
-            showError('Camera access required for attendance. Please enable camera permissions and refresh.');
+            showError(`⚠ Camera Error: ${error.message || 'Unknown error'}\n\nPlease enable camera permissions and refresh the page.`);
         }
     }
 }

@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- iOS Safari specific meta tags for permissions -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Attendance">
+    
+    <!-- Android Chrome specific -->
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- Theme color for mobile browsers -->
+    <meta name="theme-color" content="#667eea">
+    
     <title>Mark Attendance</title>
     <style>
         * {
@@ -261,10 +273,10 @@
             </button>
 
             <div class="camera-container">
-                <video id="video" autoplay playsinline></video>
+                <video id="video" autoplay playsinline muted></video>
                 <canvas id="canvas" class="hidden"></canvas>
                 <img id="photoPreview" alt="Captured photo">
-                <button id="captureBtn" class="camera-btn">Capture</button>
+                <button id="captureBtn" class="camera-btn">📷</button>
             </div>
 
             <div class="form-group">

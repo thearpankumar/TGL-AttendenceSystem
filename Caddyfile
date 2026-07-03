@@ -98,12 +98,12 @@
 :80 {
   encode gzip
   
-  # API routes
-  handle_path /api/* {
+  # API routes - DO NOT strip /api prefix
+  handle /api/* {
     reverse_proxy backend:5000 {
       lb_policy round_robin
       lb_try_duration 5s
-      health_path /health
+      health_uri /health
       health_interval 10s
       health_timeout 5s
     }
@@ -128,22 +128,32 @@
   }
   
   # Admin panel (React app)
-  handle_path /admin* {
+  handle /admin* {
+    reverse_proxy admin-frontend:80
+  }
+  
+  # Admin assets
+  handle /assets/* {
     reverse_proxy admin-frontend:80
   }
   
   # Student attendance page
-  handle_path /attend/* {
+  handle /attend/* {
+    reverse_proxy student-frontend:80
+  }
+  
+  # Student app.js
+  handle /app.js {
     reverse_proxy student-frontend:80
   }
   
   # Short links
-  handle_path /s/* {
+  handle /s/* {
     reverse_proxy backend:5000
   }
   
   # WebAuthn routes
-  handle_path /webauthn/* {
+  handle /webauthn/* {
     reverse_proxy backend:5000
   }
   
