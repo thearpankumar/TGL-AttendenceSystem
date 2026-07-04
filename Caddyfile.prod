@@ -1,0 +1,187 @@
+# Caddy Configuration for Attendance System
+# Supports both development (localhost) and production (domain) modes
+
+{
+  # Global settings
+  email admin@xenkrypt.in
+  
+  # Development mode - generates self-signed certs for localhost
+  # COMMENT OUT or REMOVE this line for production to use Let's Encrypt
+  # local_certs
+  
+  # Logging
+  log {
+    output stdout
+    format json
+  }
+}
+
+# ============================================
+# PRODUCTION MODE (Active - xenkrypt.in)
+# ============================================
+xenkrypt.in {
+  encode gzip zstd
+  
+  # Security headers
+  header {
+    # Enable HSTS
+    Strict-Transport-Security "max-age=31536000; include-subdomains; preload"
+    # Prevent clickjacking
+    X-Frame-Options "SAMEORIGIN"
+    # Prevent MIME sniffing
+    X-Content-Type-Options "nosniff"
+    # XSS protection
+    X-XSS-Protection "1; mode=block"
+    # Content Security Policy
+    Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+    # Referrer policy
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+  
+  # API routes - Load balanced across backend replicas
+  handle /api/* {
+    reverse_proxy backend:5000 {
+      lb_policy round_robin
+      lb_try_duration 5s
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+  
+  # Health check endpoints
+  handle /health {
+    reverse_proxy backend:5000
+  }
+  
+  handle /health/ready {
+    reverse_proxy backend:5000
+  }
+  
+  handle /health/live {
+    reverse_proxy backend:5000
+  }
+  
+  # Storage info
+  handle /api/storage-info {
+    reverse_proxy backend:5000
+  }
+  
+  # Admin panel (React app with client-side routing)
+  handle /admin* {
+    reverse_proxy admin-frontend:80
+  }
+  
+  # Admin assets
+  handle /assets/* {
+    reverse_proxy admin-frontend:80
+  }
+  
+  # Student attendance page
+  handle /attend/* {
+    reverse_proxy student-frontend:80
+  }
+  
+  # Student app.js
+  handle /app.js {
+    reverse_proxy student-frontend:80
+  }
+  
+  # Short links
+  handle /s/* {
+    reverse_proxy backend:5000
+  }
+  
+  # WebAuthn routes
+  handle /webauthn/* {
+    reverse_proxy backend:5000
+  }
+  
+  # 32-char hex token redirect to /attend/:token
+  @tokenRegex path_regexp ^/([a-f0-9]{32})$
+  handle @tokenRegex {
+    redir https://{host}/attend{http.matchers.path_regexp.1} permanent
+  }
+  
+  # Root redirect to admin
+  handle / {
+    redir https://{host}/admin permanent
+  }
+}
+
+# ============================================
+# DEVELOPMENT MODE (localhost)
+# ============================================
+:80 {
+  encode gzip
+  
+  # API routes - DO NOT strip /api prefix
+  handle /api/* {
+    reverse_proxy backend:5000 {
+      lb_policy round_robin
+      lb_try_duration 5s
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+  
+  # Health check endpoints
+  handle /health {
+    reverse_proxy backend:5000
+  }
+  
+  handle /health/ready {
+    reverse_proxy backend:5000
+  }
+  
+  handle /health/live {
+    reverse_proxy backend:5000
+  }
+  
+  # Storage info
+  handle /api/storage-info {
+    reverse_proxy backend:5000
+  }
+  
+  # Admin panel (React app)
+  handle /admin* {
+    reverse_proxy admin-frontend:80
+  }
+  
+  # Admin assets
+  handle /assets/* {
+    reverse_proxy admin-frontend:80
+  }
+  
+  # Student attendance page
+  handle /attend/* {
+    reverse_proxy student-frontend:80
+  }
+  
+  # Student app.js
+  handle /app.js {
+    reverse_proxy student-frontend:80
+  }
+  
+  # Short links
+  handle /s/* {
+    reverse_proxy backend:5000
+  }
+  
+  # WebAuthn routes
+  handle /webauthn/* {
+    reverse_proxy backend:5000
+  }
+  
+  # 32-char hex token redirect to /attend/:token
+  @tokenRegex path_regexp ^/([a-f0-9]{32})$
+  handle @tokenRegex {
+    redir /attend{http.matchers.path_regexp.1} permanent
+  }
+  
+  # Root redirect to admin
+  handle / {
+    redir /admin permanent
+  }
+}
