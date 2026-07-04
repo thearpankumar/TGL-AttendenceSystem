@@ -80,9 +80,9 @@ function generateTOTPWithTimestamp(secret, sessionId, windowSeconds = 5) {
   return { code, expiresAt, windowSeconds };
 }
 
-// QR Anti-Sharing: 4-second rotating token
-// Token format: "${slot}.${hmac_first16}" where slot = floor(ms / 4000)
-const QR_WINDOW_MS = 4000;
+// QR Anti-Sharing: 5-second rotating token
+// Token format: "${slot}.${hmac_first16}" where slot = floor(ms / 5000)
+const QR_WINDOW_MS = 5000;
 
 function generateQRToken(shortCode, secret) {
   const slot = Math.floor(Date.now() / QR_WINDOW_MS);
