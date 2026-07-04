@@ -232,12 +232,7 @@ const QRDisplay = () => {
           </div>
         </div>
 
-        {/* Base URL copy strip */}
-        <div style={{ background: 'rgba(255,255,255,0.15)', padding: '10px 20px', borderRadius: 8, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%' }}
-          onClick={() => navigator.clipboard.writeText(baseUrl)} title="Copy base URL">
-          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{baseUrl}</span>
-          <span style={{ fontSize: 16 }}>📋</span>
-        </div>
+
 
         {/* Session info */}
         <div style={{ color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontSize: 14 }}>
