@@ -502,12 +502,21 @@ describe('Short Link Redirect Route', () => {
   });
 
   describe('GET /s/:shortCode', () => {
-    it('should redirect to student page for valid link', async () => {
+    it('should redirect to /attend/<shortCode> for valid link', async () => {
       const res = await request(app)
         .get('/s/redirect123');
 
       expect(res.status).toBe(302);
-      expect(res.headers.location).toContain('student-scan.html');
+      // Must redirect to /attend/<shortCode> — the student page reads the code from the URL path
+      expect(res.headers.location).toBe('/attend/redirect123');
+    });
+
+    it('should NOT redirect to student-scan.html directly (old broken URL)', async () => {
+      const res = await request(app)
+        .get('/s/redirect123');
+
+      expect(res.headers.location).not.toContain('student-scan.html');
+      expect(res.headers.location).not.toContain('?sl=');
     });
 
     it('should return 404 for non-existent link', async () => {
@@ -527,6 +536,37 @@ describe('Short Link Redirect Route', () => {
 
       expect(res.status).toBe(400);
       expect(res.text).toContain('Not Configured');
+    });
+
+    it('should increment clickCount on successful redirect', async () => {
+      const before = await ShortLink.findOne({ shortCode: 'redirect123' });
+      expect(before.clickCount).toBe(0);
+
+      await request(app).get('/s/redirect123');
+
+      const after = await ShortLink.findOne({ shortCode: 'redirect123' });
+      expect(after.clickCount).toBe(1);
+      expect(after.lastClickedAt).toBeDefined();
+    });
+
+    it('should return 410 for expired session', async () => {
+      await Session.findByIdAndUpdate(sessionId, {
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const res = await request(app).get('/s/redirect123');
+
+      expect(res.status).toBe(410);
+      expect(res.text).toContain('Expired');
+    });
+
+    it('should return 400 for inactive session', async () => {
+      await Session.findByIdAndUpdate(sessionId, { isActive: false });
+
+      const res = await request(app).get('/s/redirect123');
+
+      expect(res.status).toBe(400);
+      expect(res.text).toContain('Inactive');
     });
   });
 
