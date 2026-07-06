@@ -507,7 +507,7 @@ describe('Short Link Redirect Route', () => {
         .get('/s/redirect123');
 
       expect(res.status).toBe(302);
-      expect(res.headers.location).toContain('student-scan.html');
+      expect(res.headers.location).toContain('/attend/redirect123');
     });
 
     it('should return 404 for non-existent link', async () => {
