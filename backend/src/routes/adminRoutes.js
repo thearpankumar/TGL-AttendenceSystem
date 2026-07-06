@@ -18,6 +18,9 @@ router.post('/register', validateAdmin, adminController.createAdmin);
 router.post('/login', loginLimiter, validateLogin, adminController.loginAdmin);
 router.get('/profile', protect, adminController.getAdminProfile);
 router.get('/dashboard', protect, adminController.getDashboardStats);
+router.get('/dashboard/recent-activity', protect, adminController.getRecentActivity);
+router.get('/dashboard/attendance-series', protect, adminController.getAttendanceSeries);
+router.get('/dashboard/sessions-by-date', protect, adminController.getSessionsByDate);
 
 router.use(protect);
 router.use(adminLimiter);

@@ -133,12 +133,17 @@
   }
   
   # Admin assets
-  handle /assets/* {
+  handle /admin-assets/* {
     reverse_proxy admin-frontend:80
   }
-  
+
   # Student attendance page
   handle /attend/* {
+    reverse_proxy student-frontend:80
+  }
+
+  # Student assets
+  handle /attend-assets/* {
     reverse_proxy student-frontend:80
   }
   
