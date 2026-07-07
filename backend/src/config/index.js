@@ -66,7 +66,7 @@ module.exports = {
   },
   
   webauthn: {
-    rpName: process.env.WEBAUTHN_RP_NAME || 'SentriX Attendance System',
+    rpName: process.env.WEBAUTHN_RP_NAME || 'Attendix Attendance System',
     rpID: process.env.WEBAUTHN_RP_ID || 'localhost',
     origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:5000',
   },

@@ -17,7 +17,7 @@ const MobileDrawer = ({ onClose }: { onClose: () => void }) => {
         <div className="drawer-header">
           <div className="sidebar-logo">
             <Shield size={18} />
-            <span>SentriX</span>
+            <span>Attendix</span>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button className="theme-toggle-btn" onClick={toggleTheme} aria-label="Toggle theme">

@@ -15,7 +15,7 @@ const Sidebar = () => {
       <div className="sidebar-header">
         <div className="sidebar-logo">
           <Shield size={20} />
-          <span>SentriX</span>
+          <span>Attendix</span>
         </div>
         <button className="theme-toggle-btn" onClick={toggleTheme} aria-label="Toggle theme">
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}

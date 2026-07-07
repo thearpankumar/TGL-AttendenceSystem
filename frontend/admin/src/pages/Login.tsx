@@ -24,7 +24,7 @@ const Login = () => {
       <div className="login-card">
         <div className="login-brand">
           <ClipboardCheck size={22} />
-          <span>SentriX</span>
+          <span>Attendix</span>
         </div>
         <h2>Admin Login</h2>
         <form onSubmit={handleSubmit}>
