@@ -48,32 +48,31 @@
   }
   
   # Admin assets
-  handle /assets/* {
+  handle /admin-assets/* {
     reverse_proxy admin-frontend:80
   }
-  
+
   # Student attendance page
   handle /attend/* {
     reverse_proxy student-frontend:80
   }
-  
-  # Student scan page (short link redirect target)
-  handle /student-scan.html {
+
+  # Student assets
+  handle /attend-assets/* {
     reverse_proxy student-frontend:80
   }
   
-  # Student app.js
+  # Student app.js and face detection models
   handle /app.js {
     reverse_proxy student-frontend:80
   }
-  
-  # Short links
-  handle /s/* {
-    reverse_proxy backend:5000
+
+  handle /models/* {
+    reverse_proxy student-frontend:80
   }
   
-  # WebAuthn routes
-  handle /webauthn/* {
+  # Short links (and WebAuthn routes which are mounted under /s)
+  handle /s/* {
     reverse_proxy backend:5000
   }
   

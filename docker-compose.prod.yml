@@ -112,7 +112,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       # WebAuthn
-      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-SentriX Attendance System}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Attendix Attendance System}
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-xenkrypt.in}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-https://xenkrypt.in}
       # Database Pool

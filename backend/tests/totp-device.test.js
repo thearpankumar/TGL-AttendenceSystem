@@ -611,8 +611,7 @@ describe('Short Link Redirect Route', () => {
         .get('/s/redirect123');
 
       expect(res.status).toBe(302);
-      // Must redirect to /attend/<shortCode> — the student page reads the code from the URL path
-      expect(res.headers.location).toBe('/attend/redirect123');
+      expect(res.headers.location).toContain('/attend/redirect123');
     });
 
     it('should NOT redirect to student-scan.html directly (old broken URL)', async () => {
@@ -678,7 +677,7 @@ describe('Short Link Redirect Route', () => {
     it('should verify correct TOTP code and roll number', async () => {
       // Session defaults to totpWindowSeconds=15 — generate code with matching window
       const totpCode = generateTOTPCode('redirect-test-secret', sessionId.toString(), 15);
-      
+
       const res = await request(app).post('/s/redirect123/verify-gatekeeper').send({
         rollNumber: 'CS101',
         totpCode

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #===============================================================================
-# SentriX Attendance System - Development Setup Script
+# Attendix Attendance System - Development Setup Script
 #===============================================================================
 # This script sets up the development environment for the Attendance GEOTAG System
 # Compatible with: Ubuntu/Debian Linux and macOS (Intel & Apple Silicon)
@@ -74,7 +74,7 @@ detect_os() {
 print_banner() {
     echo ""
     echo -e "${PURPLE}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${PURPLE}║      ${BOLD}${CYAN}SentriX Attendance System - Setup Script${NC}${PURPLE}           ║${NC}"
+    echo -e "${PURPLE}║      ${BOLD}${CYAN}Attendix Attendance System - Setup Script${NC}${PURPLE}           ║${NC}"
     echo -e "${PURPLE}║  ${YELLOW}Geotagged Attendance with Biometric Verification${NC}${PURPLE}       ║${NC}"
     echo -e "${PURPLE}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""

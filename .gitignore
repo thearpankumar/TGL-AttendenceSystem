@@ -1,3 +1,5 @@
+admin-credentials.txt
+
 # Dependencies
 node_modules/
 .pnp
@@ -56,7 +58,7 @@ Thumbs.db
 .parcel-cache/
 .eslintcache/
 .stylelintcache/
-.tsbuildinfo
+*.tsbuildinfo
 
 # Temporary files
 tmp/

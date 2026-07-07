@@ -12,6 +12,7 @@ const { calculateDistance } = require('../utils/geoUtils');
 const svgCaptcha = require('svg-captcha');
 const crypto = require('crypto');
 const config = require('../config');
+const ipaddr = require('ipaddr.js');
 
 const signCaptchaText = (text, timestamp) => {
   return crypto
@@ -19,6 +20,40 @@ const signCaptchaText = (text, timestamp) => {
     .update(`${text.toLowerCase()}:${timestamp}`)
     .digest('hex');
 };
+
+router.get('/:shortCode/upload-url', studentLimiter, async (req, res) => {
+  try {
+    const { shortCode } = req.params;
+
+    const shortLink = await ShortLink.findOne({
+      shortCode: shortCode.toLowerCase(),
+      isActive: true,
+    }).populate('sessionId');
+
+    if (!shortLink || !shortLink.sessionId) {
+      return res.status(404).json({ message: 'Invalid short link' });
+    }
+
+    const session = shortLink.sessionId;
+    if (!session.isActive || (session.expiresAt && new Date() > session.expiresAt)) {
+      return res.status(400).json({ message: 'Session is not active' });
+    }
+
+    const storage = getStorageProvider();
+    const key = `${session._id}_${Date.now()}`;
+    const uploadInfo = await storage.getUploadUrl(key, 'image/jpeg');
+
+    res.json({
+      uploadUrl: uploadInfo.uploadUrl,
+      publicId: uploadInfo.publicId,
+      method: uploadInfo.method,
+      headers: uploadInfo.headers || {},
+      contentType: uploadInfo.contentType || 'image/jpeg',
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 
 router.get('/:shortCode/captcha', async (req, res) => {
   try {
@@ -232,7 +267,7 @@ router.post('/:shortCode/submit', studentLimiter, async (req, res) => {
         photoUrl = uploadResult.url;
         photoPublicId = uploadResult.publicId;
       } catch (uploadError) {
-        console.error('Photo upload error details:', uploadError);
+        if (process.env.NODE_ENV !== 'test') console.error('Photo upload error details:', uploadError);
         return res.status(400).json({
           message: 'Failed to upload photo',
           error: uploadError.message,
@@ -259,12 +294,36 @@ router.post('/:shortCode/submit', studentLimiter, async (req, res) => {
     let networkOrg = 'Unknown';
 
     const ip = req.ip;
-    if (ip && ip !== '::1' && ip !== '127.0.0.1' && !ip.startsWith('::ffff:') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+    let isPublicIp = true;
+    if (ip && ipaddr.isValid(ip)) {
+      try {
+        const parsedIp = ipaddr.parse(ip);
+        const range = parsedIp.range();
+        const privateRanges = ['private', 'loopback', 'linkLocal', 'uniqueLocal', 'unspecified'];
+        
+        if (privateRanges.includes(range)) {
+          isPublicIp = false;
+        } else if (range === 'ipv4Mapped') {
+          const ipv4 = parsedIp.toIPv4Address();
+          if (privateRanges.includes(ipv4.range())) {
+            isPublicIp = false;
+          }
+        }
+      } catch (e) {
+        // Fallback
+        isPublicIp = false;
+      }
+    } else {
+      isPublicIp = false;
+    }
+
+    if (isPublicIp) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 2000);
         
-        const ipRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,isp,org`, {
+        const ipApiUrl = process.env.IP_API_URL || 'http://ip-api.com/json/';
+        const ipRes = await fetch(`${ipApiUrl}${ip}?fields=status,message,isp,org`, {
           signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -328,7 +387,7 @@ router.post('/:shortCode/submit', studentLimiter, async (req, res) => {
         message: 'Attendance already submitted for this roll number',
       });
     }
-    console.error('Submit attendance error:', error);
+    if (process.env.NODE_ENV !== 'test') console.error('Submit attendance error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -507,7 +566,7 @@ router.get('/:shortCode', studentLimiter, async (req, res) => {
 
     res.redirect(studentAppUrl);
   } catch (error) {
-    console.error('Short link redirect error:', error);
+    if (process.env.NODE_ENV !== 'test') console.error('Short link redirect error:', error);
     res.status(500).send(`
       <!DOCTYPE html>
       <html>

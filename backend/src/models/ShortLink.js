@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const shortLinkSchema = new mongoose.Schema({
   shortCode: {
@@ -49,7 +50,7 @@ shortLinkSchema.statics.generateShortCode = function(length = 6) {
   const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
   let code = '';
   for (let i = 0; i < length; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars[crypto.randomInt(chars.length)];
   }
   return code;
 };

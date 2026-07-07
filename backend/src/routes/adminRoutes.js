@@ -14,13 +14,17 @@ const {
 } = require('../middleware/validators');
 const { loginLimiter, adminLimiter } = require('../middleware/rateLimiter');
 
-router.post('/register', validateAdmin, adminController.createAdmin);
+router.post('/register', loginLimiter, validateAdmin, adminController.createAdmin);
 router.post('/login', loginLimiter, validateLogin, adminController.loginAdmin);
-router.get('/profile', protect, adminController.getAdminProfile);
-router.get('/dashboard', protect, adminController.getDashboardStats);
 
 router.use(protect);
 router.use(adminLimiter);
+
+router.get('/profile', adminController.getAdminProfile);
+router.get('/dashboard', adminController.getDashboardStats);
+router.get('/dashboard/recent-activity', adminController.getRecentActivity);
+router.get('/dashboard/attendance-series', adminController.getAttendanceSeries);
+router.get('/dashboard/sessions-by-date', adminController.getSessionsByDate);
 
 router.post('/locations', validateLocation, locationController.createLocation);
 router.get('/locations', locationController.getLocations);
