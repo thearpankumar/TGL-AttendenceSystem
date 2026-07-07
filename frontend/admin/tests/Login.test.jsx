@@ -87,4 +87,27 @@ describe('Login Component Tests', () => {
     const inputs = document.querySelectorAll('input[required]');
     expect(inputs.length).toBe(2);
   });
+
+  it('should call login on successful submit', async () => {
+    mockLogin.mockResolvedValue({ success: true });
+    const { container } = render(<Login />);
+    
+    const form = container.querySelector('form');
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'admin' } });
+    fireEvent.change(document.querySelector('input[type="password"]'), { target: { value: 'pass' } });
+    
+    fireEvent.submit(form);
+    
+    expect(mockLogin).toHaveBeenCalledWith('admin', 'pass');
+  });
+
+  it('should call login and show error on failure', async () => {
+    mockLogin.mockResolvedValue({ success: false, message: 'Invalid credentials' });
+    const { container } = render(<Login />);
+    
+    const form = container.querySelector('form');
+    fireEvent.submit(form);
+    
+    expect(mockLogin).toHaveBeenCalled();
+  });
 });

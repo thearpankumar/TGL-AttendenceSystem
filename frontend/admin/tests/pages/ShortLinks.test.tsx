@@ -86,4 +86,54 @@ describe('ShortLinks', () => {
       expect(toast.error).toHaveBeenCalledWith('Short code already in use');
     });
   });
+
+  it('should handle detach short link', async () => {
+    (axios.get as any).mockImplementation((url: string) => {
+      if (url.includes('/shortlinks')) return Promise.resolve({ data: { shortLinks: [{ _id: '1', shortCode: 'TEST1', sessionId: { _id: 'sess1' }, isActive: true, createdAt: new Date().toISOString() }] } });
+      if (url.includes('/sessions')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    (axios.post as any).mockResolvedValue({});
+    
+    // Mock window.confirm
+    vi.spyOn(window, 'confirm').mockImplementation(() => true);
+
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Detach')).toBeInTheDocument());
+    
+    fireEvent.click(screen.getByText('Detach'));
+    await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/api/admin/shortlinks/TEST1/detach'));
+  });
+
+  it('should handle attach short link', async () => {
+    (axios.get as any).mockImplementation((url: string) => {
+      if (url.includes('/shortlinks')) return Promise.resolve({ data: { shortLinks: [{ _id: '1', shortCode: 'TEST1', sessionId: null, isActive: true, createdAt: new Date().toISOString() }] } });
+      if (url.includes('/sessions')) return Promise.resolve({ data: [{ _id: 'sess1', isActive: true, expiresAt: new Date(Date.now() + 100000).toISOString(), description: 'Active Session' }] });
+      return Promise.resolve({ data: [] });
+    });
+    (axios.post as any).mockResolvedValue({});
+
+    renderComponent();
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument());
+    
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sess1' } });
+    await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/api/admin/shortlinks/TEST1/attach', { sessionId: 'sess1' }));
+  });
+
+  it('should handle delete short link', async () => {
+    (axios.get as any).mockImplementation((url: string) => {
+      if (url.includes('/shortlinks')) return Promise.resolve({ data: { shortLinks: [{ _id: '1', shortCode: 'TEST1', isActive: true, createdAt: new Date().toISOString() }] } });
+      if (url.includes('/sessions')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    (axios.delete as any).mockResolvedValue({});
+    
+    vi.spyOn(window, 'confirm').mockImplementation(() => true);
+
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Delete')).toBeInTheDocument());
+    
+    fireEvent.click(screen.getByText('Delete'));
+    await waitFor(() => expect(axios.delete).toHaveBeenCalledWith('/api/admin/shortlinks/TEST1'));
+  });
 });

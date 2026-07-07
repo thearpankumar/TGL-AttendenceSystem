@@ -1,5 +1,6 @@
 const ShortLink = require('../models/ShortLink');
 const Session = require('../models/Session');
+const mongoose = require('mongoose');
 
 async function createShortLink(req, res) {
   try {
@@ -20,6 +21,9 @@ async function createShortLink(req, res) {
     }
     let sessionObj = null;
     if (sessionId) {
+      if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+        return res.status(400).json({ message: 'Invalid session ID format' });
+      }
       sessionObj = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
       if (!sessionObj) {
         return res.status(404).json({ message: 'Session not found or unauthorized' });
@@ -111,6 +115,11 @@ async function attachShortLinkToSession(req, res) {
         currentSessionId: shortLink.sessionId 
       });
     }
+    
+    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ message: 'Invalid session ID format' });
+    }
+    
     const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
     if (!session) {
       return res.status(404).json({ message: 'Session not found or unauthorized' });

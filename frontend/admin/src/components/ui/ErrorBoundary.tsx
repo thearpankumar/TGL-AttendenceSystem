@@ -28,7 +28,8 @@ class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return this.props.fallback || (
         <div className="chart-empty chart-error">
-          Something went wrong loading this component.
+          <p>Something went wrong loading this component.</p>
+          {this.state.error && <p style={{ fontSize: '0.8em', opacity: 0.8 }}>{this.state.error.message}</p>}
         </div>
       );
     }

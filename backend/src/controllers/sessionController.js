@@ -4,6 +4,7 @@ const Attendance = require('../models/Attendance');
 const Admin = require('../models/Admin');
 const ShortLink = require('../models/ShortLink');
 const Device = require('../models/Device');
+const mongoose = require('mongoose');
 const { getStorageProvider } = require('../storage');
 const { generateTOTPWithTimestamp, generateQRToken } = require('../utils/totpUtils');
 const { invalidateSessionCache } = require('../middleware/sessionCache');
@@ -323,6 +324,9 @@ const getFlaggedAttendance = async (req, res) => {
     };
     
     if (sessionId) {
+      if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+        return res.status(400).json({ message: 'Invalid session ID format' });
+      }
       const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
       if (!session) {
         return res.status(404).json({ message: 'Session not found' });
@@ -372,6 +376,10 @@ const reviewAttendanceFlag = async (req, res) => {
 const getDevicesForSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ message: 'Invalid session ID format' });
+    }
     
     const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
     if (!session) {
