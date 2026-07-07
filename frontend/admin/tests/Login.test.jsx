@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Login from '../src/pages/Login';
 
@@ -96,7 +96,9 @@ describe('Login Component Tests', () => {
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'admin' } });
     fireEvent.change(document.querySelector('input[type="password"]'), { target: { value: 'pass' } });
     
-    fireEvent.submit(form);
+    await act(async () => {
+      fireEvent.submit(form);
+    });
     
     expect(mockLogin).toHaveBeenCalledWith('admin', 'pass');
   });
@@ -106,7 +108,10 @@ describe('Login Component Tests', () => {
     const { container } = render(<Login />);
     
     const form = container.querySelector('form');
-    fireEvent.submit(form);
+    
+    await act(async () => {
+      fireEvent.submit(form);
+    });
     
     expect(mockLogin).toHaveBeenCalled();
   });
