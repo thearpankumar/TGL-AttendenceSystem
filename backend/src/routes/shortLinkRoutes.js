@@ -6,7 +6,7 @@ const Attendance = require('../models/Attendance');
 const Location = require('../models/Location');
 const Device = require('../models/Device');
 const { studentLimiter } = require('../middleware/rateLimiter');
-const { generateTOTPWithTimestamp, validateTOTPCode, validateQRToken } = require('../utils/totpUtils');
+const { validateTOTPCode, validateQRToken } = require('../utils/totpUtils');
 const { requireMobileDevice } = require('../middleware/mobileCheck');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
@@ -310,7 +310,7 @@ router.post('/:shortCode/submit', studentLimiter, requireMobileDevice, async (re
             isPublicIp = false;
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Fallback
         isPublicIp = false;
       }

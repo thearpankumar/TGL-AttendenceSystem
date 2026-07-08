@@ -1,8 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import StudentScan from './pages/StudentScan';
 import LegacyAttend from './pages/LegacyAttend';
+import { useIsMobile } from './hooks/useIsMobile';
+import MobileDeviceRequired from './components/MobileDeviceRequired';
 
 function App() {
+  const isMobile = useIsMobile();
+
+  if (!isMobile) {
+    return <MobileDeviceRequired />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>

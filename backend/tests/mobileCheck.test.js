@@ -54,9 +54,13 @@ describe('Mobile Device Middleware', () => {
       { name: 'iPhone', ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1', allowed: true },
       { name: 'iPad', ua: 'Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1', allowed: true },
       { name: 'Android Phone', ua: 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36', allowed: true },
-      { name: 'Android Tablet', ua: 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: true }, // Tablets are usually classified as tablet if no Mobile flag, ua-parser-js handles it
-      { name: 'Windows Desktop', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: false },
-      { name: 'Mac Desktop', ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: false },
+      { name: 'Android Tablet', ua: 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: true },
+      // Under the hybrid plan, standard desktop OSs are passed to the frontend for strict hardware checks
+      { name: 'Windows Desktop', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: true },
+      { name: 'Mac Desktop', ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36', allowed: true },
+      // Bots and empty agents are strictly blocked at the edge
+      { name: 'Curl Bot', ua: 'curl/7.68.0', allowed: false },
+      { name: 'Python Requests', ua: 'python-requests/2.25.1', allowed: false },
       { name: 'Empty User Agent', ua: '', allowed: false },
       { name: 'No User Agent', ua: null, allowed: false },
     ];
@@ -69,6 +73,9 @@ describe('Mobile Device Middleware', () => {
             req.set('x-test-mobile-check', 'true');
             if (tc.ua !== null) {
               req.set('User-Agent', tc.ua);
+            }
+            if (ep.method === 'post' || ep.path('').endsWith('/session')) {
+              req.set('Accept', 'application/json');
             }
             if (ep.method === 'post') {
               req.send({}); // Send empty body for submit
