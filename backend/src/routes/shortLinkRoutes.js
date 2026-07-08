@@ -7,6 +7,7 @@ const Location = require('../models/Location');
 const Device = require('../models/Device');
 const { studentLimiter } = require('../middleware/rateLimiter');
 const { generateTOTPWithTimestamp, validateTOTPCode, validateQRToken } = require('../utils/totpUtils');
+const { requireMobileDevice } = require('../middleware/mobileCheck');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
 const svgCaptcha = require('svg-captcha');
@@ -81,7 +82,7 @@ router.get('/:shortCode/captcha', async (req, res) => {
   }
 });
 
-router.post('/:shortCode/submit', studentLimiter, async (req, res) => {
+router.post('/:shortCode/submit', studentLimiter, requireMobileDevice, async (req, res) => {
   try {
     const { shortCode } = req.params;
     const {
@@ -394,7 +395,7 @@ router.post('/:shortCode/submit', studentLimiter, async (req, res) => {
 
 
 
-router.get('/:shortCode/session', studentLimiter, async (req, res) => {
+router.get('/:shortCode/session', studentLimiter, requireMobileDevice, async (req, res) => {
   try {
     const { shortCode } = req.params;
     
@@ -445,7 +446,7 @@ router.get('/:shortCode/session', studentLimiter, async (req, res) => {
   }
 });
 
-router.get('/:shortCode', studentLimiter, async (req, res) => {
+router.get('/:shortCode', studentLimiter, requireMobileDevice, async (req, res) => {
   try {
     const { shortCode } = req.params;
     
