@@ -7,6 +7,7 @@ import PageHeader from '../components/ui/PageHeader';
 import DataTable from '../components/ui/DataTable';
 import type { Column } from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
+import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import ConfirmModal from '../components/ui/ConfirmModal';

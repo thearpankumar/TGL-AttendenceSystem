@@ -167,7 +167,7 @@ describe('WebAuthn Registration Start', () => {
     expect(res.body.challenge).toBeDefined();
     expect(res.body.rp).toBeDefined();
     expect(res.body.user).toBeDefined();
-    expect(res.body.authenticatorSelection.authenticatorAttachment).toBeUndefined();
+    expect(res.body.authenticatorSelection.authenticatorAttachment).toBe('platform');
     expect(res.body.authenticatorSelection.userVerification).toBe('preferred');
   });
 

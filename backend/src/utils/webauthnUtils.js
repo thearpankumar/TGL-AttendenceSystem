@@ -38,6 +38,7 @@ async function createRegistrationOptions(userId, userName, displayName, excludeC
       transports: cred.transports || [],
     })),
     authenticatorSelection: {
+      authenticatorAttachment: 'platform',
       userVerification: 'preferred',
       residentKey: 'preferred',
     },
