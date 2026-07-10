@@ -430,7 +430,9 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     const { authenticationInfo } = verification;
     const newCounter = authenticationInfo.newCounter;
     
-    if (newCounter <= storedCredential.counter) {
+    const isCounterSupported = newCounter > 0 || storedCredential.counter > 0;
+    
+    if (isCounterSupported && newCounter <= storedCredential.counter) {
       await Flag.create({
         type: 'WEBAUTHN_REPLAY_ATTACK',
         adminId: null,
