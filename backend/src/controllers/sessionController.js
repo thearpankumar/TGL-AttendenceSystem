@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 const { getStorageProvider } = require('../storage');
 const { generateTOTPWithTimestamp, generateQRToken } = require('../utils/totpUtils');
 const { invalidateSessionCache } = require('../middleware/sessionCache');
+const ExcelJS = require('exceljs');
 
 const createSession = async (req, res) => {
   try {
@@ -171,9 +172,81 @@ const getSessionAttendance = async (req, res) => {
     const attendance = await Attendance.find({ sessionId: session._id })
       .sort({ capturedAt: -1 });
 
-    res.json(attendance);
+    const storage = getStorageProvider();
+    
+    // Generate signed URLs dynamically for providers that require them (like S3)
+    const attendanceWithSignedUrls = await Promise.all(
+      attendance.map(async (record) => {
+        const doc = record.toObject();
+        if (doc.photoPublicId) {
+          try {
+            // S3Provider overrides this to generate short-lived presigned URLs
+            doc.photoUrl = await storage.getDownloadUrl(doc.photoPublicId, 3600);
+          } catch (_e) {
+            // Fall back to stored URL if signing fails
+          }
+        }
+        return doc;
+      })
+    );
+
+    res.json(attendanceWithSignedUrls);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const exportSessionAttendance = async (req, res) => {
+  try {
+    const session = await Session.findOne({
+      _id: req.params.id,
+      createdBy: req.admin._id,
+    }).populate('locationId');
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    const safeFilename = `Attendance_Export_${req.params.id}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
+    const worksheet = workbook.addWorksheet('Attendance');
+
+    worksheet.columns = [
+      { header: 'Roll Number', key: 'rollNumber', width: 15 },
+      { header: 'Student Name', key: 'studentName', width: 25 },
+      { header: 'Time (UTC)', key: 'time', width: 20 },
+      { header: 'Location Status', key: 'locStatus', width: 15 },
+      { header: 'Distance (m)', key: 'distance', width: 15 },
+      { header: 'Device Identity', key: 'deviceInfo', width: 35 },
+      { header: 'Warnings', key: 'warnings', width: 40 },
+    ];
+
+    const cursor = Attendance.find({ sessionId: session._id }).cursor();
+
+    for await (const record of cursor) {
+      worksheet.addRow({
+        rollNumber: record.rollNumber,
+        studentName: record.studentName,
+        time: new Date(record.capturedAt).toISOString(),
+        locStatus: record.verified ? 'Verified' : 'Flagged',
+        distance: record.distanceFromLocation != null ? record.distanceFromLocation.toFixed(2) : 'N/A',
+        deviceInfo: record.deviceFingerprint ? record.deviceFingerprint.substring(0, 16) : 'Unknown',
+        warnings: record.deviceFlag ? record.deviceFlag : (record.isDevBypass ? 'Mock Location/Camera' : 'None'),
+      }).commit();
+    }
+
+    await worksheet.commit();
+    await workbook.commit();
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Server error during export', error: error.message });
+    } else {
+      res.end(); // Terminate the stream if headers were already sent
+    }
   }
 };
 
@@ -337,7 +410,23 @@ const getFlaggedAttendance = async (req, res) => {
       .populate('sessionId', 'description expiresAt isActive')
       .sort({ capturedAt: -1 });
     
-    res.json(flaggedAttendance);
+    const storage = getStorageProvider();
+    
+    const flaggedWithSignedUrls = await Promise.all(
+      flaggedAttendance.map(async (record) => {
+        const doc = record.toObject();
+        if (doc.photoPublicId) {
+          try {
+            doc.photoUrl = await storage.getDownloadUrl(doc.photoPublicId, 3600);
+          } catch (_e) {
+            // Keep original URL on error
+          }
+        }
+        return doc;
+      })
+    );
+
+    res.json(flaggedWithSignedUrls);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -408,4 +497,5 @@ module.exports = {
   getFlaggedAttendance,
   reviewAttendanceFlag,
   getDevicesForSession,
+  exportSessionAttendance,
 };

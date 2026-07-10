@@ -42,6 +42,7 @@ router.get('/sessions/:id/attendance', sessionController.getSessionAttendance);
 router.get('/sessions/:id/stats', sessionController.getSessionStats);
 router.get('/sessions/:id/totp', sessionController.getSessionTOTP);
 router.get('/sessions/:id/devices', sessionController.getDevicesForSession);
+router.get('/sessions/:id/export', sessionController.exportSessionAttendance);
 
 router.get('/flagged', sessionController.getFlaggedAttendance);
 router.patch('/attendance/:id/review', sessionController.reviewAttendanceFlag);

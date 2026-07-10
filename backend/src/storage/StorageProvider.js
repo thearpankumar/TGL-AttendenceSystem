@@ -15,6 +15,11 @@ class StorageProvider {
     throw new Error('Method not implemented');
   }
 
+  async getDownloadUrl(publicId) {
+    // Default implementation falls back to public URL
+    return this.getFileUrl(publicId);
+  }
+
   getName() {
     throw new Error('Method not implemented');
   }

@@ -61,6 +61,7 @@ const SessionDetail = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'rotate' | 'deactivate' | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -97,22 +98,23 @@ const SessionDetail = () => {
     setConfirmAction(null);
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = async () => {
     if (!attendance.length) { toast.error('No attendance data to export'); return; }
-    const headers = ['Roll Number', 'Name', 'Verified', 'Distance (m)', 'IP Address', 'Network Provider', 'Device', 'Face Detected', 'Captured At'];
-    const csv = [
-      headers.join(','),
-      ...attendance.map((a) => [
-        a.rollNumber, `"${a.studentName}"`, a.verified ? 'Yes' : 'No',
-        a.distanceFromLocation, a.ipAddress || 'N/A', `"${a.networkProvider || 'N/A'}"`,
-        `"${parseUA(a.userAgent)}"`, a.faceDetected !== false ? 'Yes' : 'No',
-        new Date(a.capturedAt).toISOString(),
-      ].join(',')),
-    ].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `attendance-${id}-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    setIsExporting(true);
+    try {
+      const res = await axios.get(`/api/admin/sessions/${id}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url; 
+      a.download = `Attendance_Export_${id}.xlsx`;
+      a.click(); 
+      URL.revokeObjectURL(url);
+      toast.success('Export downloaded successfully!');
+    } catch (_err) {
+      toast.error('Failed to export attendance');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (loading) return <div className="container"><SkeletonTiles count={3} /><SkeletonRows /></div>;
@@ -173,7 +175,9 @@ const SessionDetail = () => {
       <div className="card card-table">
         <div className="row" style={{ padding: 'var(--space-5) var(--space-6) 0' }}>
           <h3>Attendance Records</h3>
-          <button className="btn btn-secondary btn-small" onClick={handleExportCSV}>Export CSV</button>
+          <button className="btn btn-secondary btn-small" onClick={handleExportExcel} disabled={isExporting}>
+            {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </button>
         </div>
         {attendance.length === 0 ? (
           <p style={{ padding: 'var(--space-6)' }}>No attendance records yet</p>
