@@ -6,17 +6,22 @@ const Attendance = require('../models/Attendance');
 const WebAuthnCredential = require('../models/WebAuthnCredential');
 const WebAuthnChallenge = require('../models/WebAuthnChallenge');
 const Device = require('../models/Device');
-const { studentLimiter } = require('../middleware/rateLimiter');
+const Flag = require('../models/Flag');
+const PhotoHash = require('../models/PhotoHash');
+const { studentLimiter, registrationLimiter } = require('../middleware/rateLimiter');
 const { requireMobileDevice } = require('../middleware/mobileCheck');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
 const crypto = require('crypto');
 const config = require('../config');
+const { detectFace, checkPhotoReuse } = require('../services/faceDetection');
+const { computePerceptualHash, validateImage, sanitizeImage } = require('../utils/photoHash');
 const {
   generateChallenge,
   createRegistrationOptions,
   verifyRegistration,
   createAuthenticationOptions,
+  createAuthenticationOptionsWithoutCredentials,
   verifyAuthentication,
   getVerificationMethod,
   getAuthenticatorAttachment,
@@ -72,12 +77,13 @@ router.get('/:shortCode/webauthn/status/:rollNumber', requireMobileDevice, async
       studentName: credential?.deviceLabel || null,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
   }
 });
 
 
-router.post('/:shortCode/webauthn/register/start', requireMobileDevice, async (req, res) => {
+router.post('/:shortCode/webauthn/register/start', registrationLimiter, requireMobileDevice, async (req, res) => {
   try {
     const { shortCode } = req.params;
     const { rollNumber, studentName } = req.body;
@@ -134,11 +140,12 @@ router.post('/:shortCode/webauthn/register/start', requireMobileDevice, async (r
     
     res.json(options);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
   }
 });
 
-router.post('/:shortCode/webauthn/register/finish', requireMobileDevice, async (req, res) => {
+router.post('/:shortCode/webauthn/register/finish', registrationLimiter, requireMobileDevice, async (req, res) => {
   try {
     const { rollNumber, credential } = req.body;
     
@@ -196,7 +203,8 @@ router.post('/:shortCode/webauthn/register/finish', requireMobileDevice, async (
       message: 'Device enrolled successfully',
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
   }
 });
 
@@ -261,7 +269,46 @@ router.post('/:shortCode/webauthn/authenticate/start', requireMobileDevice, asyn
     
     res.json(options);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
+  }
+});
+
+router.post('/:shortCode/webauthn/authenticate/conditional', requireMobileDevice, async (req, res) => {
+  try {
+    const { shortCode } = req.params;
+    
+    const shortLink = await ShortLink.findOne({
+      shortCode: shortCode.toLowerCase(),
+      isActive: true,
+    }).populate('sessionId');
+    
+    if (!shortLink || !shortLink.sessionId) {
+      return res.status(404).json({ message: 'Invalid session' });
+    }
+    
+    const session = shortLink.sessionId;
+    if (!session.isActive || (session.expiresAt && new Date() > session.expiresAt)) {
+      return res.status(400).json({ message: 'Session expired' });
+    }
+    
+    const challenge = generateChallenge();
+    
+    await WebAuthnChallenge.create({
+      challenge,
+      type: 'authentication',
+      sessionId: session._id,
+      shortCode: shortCode.toLowerCase(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    });
+    
+    const options = await createAuthenticationOptionsWithoutCredentials();
+    options.challenge = challenge;
+    
+    res.json(options);
+  } catch (error) {
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
   }
 });
 
@@ -280,16 +327,33 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       deviceFingerprint,
     } = req.body;
     
-    if (!rollNumber || !credential) {
-      return res.status(400).json({ message: 'Roll number and credential required' });
+    if (!credential) {
+      return res.status(400).json({ message: 'Credential required' });
     }
     
-    const storedChallenge = await WebAuthnChallenge.findOne({
-      studentId: rollNumber.toUpperCase(),
+    let studentId = rollNumber ? rollNumber.toUpperCase() : null;
+    
+    if (credential.response?.userHandle) {
+      const userHandleBuffer = Buffer.from(credential.response.userHandle, 'base64');
+      studentId = userHandleBuffer.toString('utf8').toUpperCase();
+    }
+    
+    if (!studentId) {
+      return res.status(400).json({ message: 'Roll number required (via userHandle or body)' });
+    }
+    
+    const query = {
       type: 'authentication',
       used: false,
       expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    };
+    
+    if (rollNumber) {
+      query.studentId = rollNumber.toUpperCase();
+    }
+    
+    const storedChallenge = await WebAuthnChallenge.findOne(query)
+      .sort({ createdAt: -1 });
     
     if (!storedChallenge) {
       return res.status(400).json({ message: 'No valid authentication challenge found' });
@@ -315,11 +379,15 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     }
     
     const storedCredential = await WebAuthnCredential.findOne({
-      studentId: rollNumber.toUpperCase(),
+      credentialId: credential.id,
     });
     
     if (!storedCredential) {
       return res.status(404).json({ message: 'Credential not found' });
+    }
+    
+    if (storedCredential.studentId !== studentId) {
+      return res.status(403).json({ message: 'Credential does not match user' });
     }
     
     if (storedCredential.isSuspended) {
@@ -340,9 +408,32 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     const { authenticationInfo } = verification;
     const newCounter = authenticationInfo.newCounter;
     
-    let replayAttack = false;
     if (newCounter <= storedCredential.counter) {
-      replayAttack = true;
+      await Flag.create({
+        type: 'WEBAUTHN_REPLAY_ATTACK',
+        adminId: null,
+        details: `Counter mismatch for ${studentId}: stored=${storedCredential.counter}, received=${newCounter}`,
+        timestamp: new Date(),
+      });
+      
+      return res.status(401).json({
+        message: 'Security violation detected. Authentication rejected.',
+        reason: 'replay_attack_detected',
+      });
+    }
+    
+    if (!authenticationInfo.userVerified) {
+      await Flag.create({
+        type: 'WEBAUTHN_NO_UV',
+        adminId: null,
+        details: `User verification flag not set for ${studentId}`,
+        timestamp: new Date(),
+      });
+      
+      return res.status(401).json({
+        message: 'Biometric verification required. Please use Face ID, Touch ID, or device PIN.',
+        reason: 'user_verification_required',
+      });
     }
     
     storedCredential.counter = newCounter;
@@ -381,7 +472,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
 
     const existingAttendance = await Attendance.findOne({
       sessionId: session._id,
-      rollNumber: rollNumber.toUpperCase(),
+      rollNumber: studentId,
     });
     
     if (existingAttendance) {
@@ -390,21 +481,86 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     
     let photoUrl = '';
     let photoPublicId = '';
+    let faceDetected = false;
+    let faceConfidence = 0;
+    let photoReuseFlag = null;
     
     const storage = getStorageProvider();
     
     if (photo) {
       try {
-        const uploadResult = await storage.upload(photo, {
-          folder: 'attendance-photos',
-          key: `${session._id}_${rollNumber}_${Date.now()}`,
-        });
+        const base64Data = photo.split(',')[1];
+        const photoBuffer = Buffer.from(base64Data, 'base64');
+        
+        if (process.env.FACE_DETECTION_DISABLED !== 'true') {
+          try {
+            await validateImage(photoBuffer);
+          } catch (validationError) {
+            return res.status(400).json({
+              message: validationError.message,
+            });
+          }
+          
+          const faceResult = await detectFace(photoBuffer);
+          if (!faceResult.detected) {
+            await Flag.create({
+              type: 'NO_FACE_DETECTED',
+              details: `No face detected for ${studentId}: ${faceResult.reason}`,
+            });
+            
+            return res.status(400).json({
+              message: 'No face detected in the photo. Please ensure your face is clearly visible.',
+              reason: faceResult.reason,
+            });
+          }
+          
+          faceDetected = true;
+          faceConfidence = faceResult.confidence || 0;
+          
+          try {
+            const photoHash = await computePerceptualHash(photoBuffer);
+            
+            const reuseCheck = await checkPhotoReuse(photoHash, studentId, PhotoHash);
+            if (reuseCheck.reused) {
+              photoReuseFlag = 'REUSED_PHOTO';
+              await Flag.create({
+                type: 'REUSED_PHOTO',
+                details: `Photo hash match for ${studentId}: ${reuseCheck.reason}`,
+                timestamp: new Date(),
+              });
+            }
+            
+            await PhotoHash.create({
+              rollNumber: studentId,
+              photoHash: photoHash,
+              sessionId: session._id,
+              capturedAt: new Date(),
+              confidence: faceConfidence,
+            });
+          } catch (hashError) {
+            console.warn('Photo hashing failed:', hashError.message);
+          }
+        } else {
+          faceDetected = true;
+          faceConfidence = 0.99;
+        }
+        
+        const sanitizedPhoto = await sanitizeImage(photoBuffer);
+        
+        const uploadResult = await storage.upload(
+          `data:image/jpeg;base64,${sanitizedPhoto.toString('base64')}`,
+          {
+            folder: 'attendance-photos',
+            key: `${session._id}_${studentId}_${Date.now()}`,
+          }
+        );
         photoUrl = uploadResult.url;
         photoPublicId = uploadResult.publicId;
       } catch (uploadError) {
+        const errorMessage = config.nodeEnv === 'production' ? undefined : uploadError.message;
         return res.status(400).json({
           message: 'Failed to upload photo',
-          error: uploadError.message,
+          error: errorMessage,
         });
       }
     } else {
@@ -467,9 +623,9 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
         existingDevice.lastSeenAt = new Date();
         existingDevice.attendanceCount += 1;
         
-        if (existingDevice.boundToStudent !== rollNumber.toUpperCase()) {
+        if (existingDevice.boundToStudent !== studentId) {
           existingDevice.addFlag('MULTI_STUDENT_DEVICE', 
-            `Device previously used by ${existingDevice.boundToStudent}, now ${rollNumber}`,
+            `Device previously used by ${existingDevice.boundToStudent}, now ${studentId}`,
             session._id
           );
           if (!deviceFlag) deviceFlag = 'MULTI_STUDENT_DEVICE';
@@ -478,7 +634,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
         await existingDevice.save();
       } else {
         const studentExistingDevice = await Device.findOne({
-          boundToStudent: rollNumber.toUpperCase(),
+          boundToStudent: studentId,
           sessionId: session._id,
         });
 
@@ -488,7 +644,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
 
         const newDevice = new Device({
           fingerprintHash: deviceFingerprintHash,
-          boundToStudent: rollNumber.toUpperCase(),
+          boundToStudent: studentId,
           sessionId: session._id,
           firstSeenAt: new Date(),
           lastSeenAt: new Date(),
@@ -513,7 +669,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     const attendance = await Attendance.create({
       sessionId: session._id,
       studentName,
-      rollNumber: rollNumber.toUpperCase(),
+      rollNumber: studentId,
       photoUrl,
       photoPublicId,
       studentLatitude: latitude,
@@ -524,11 +680,11 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       networkProvider,
       networkOrg,
       verified: isWithinGeofence,
-      faceDetected: true,
+      faceDetected: faceDetected,
       deviceFingerprint,
       deviceFingerprintHash,
       deviceFirstSeen,
-      deviceFlag,
+      deviceFlag: photoReuseFlag || deviceFlag,
       webauthnCredentialId: storedCredential.credentialId,
       webauthnVerified: true,
       webauthnDeviceType: verificationMethod,
@@ -557,7 +713,8 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       replayAttack,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
+    res.status(500).json({ message: 'Server error', error: errorMessage });
   }
 });
 

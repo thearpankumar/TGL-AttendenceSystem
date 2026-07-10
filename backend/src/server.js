@@ -27,7 +27,23 @@ try {
 }
 
 app.use(helmet({
-  hsts: false,                         // HSTS handled by ngrok/nginx, not needed from the API
+  hsts: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", config.corsOrigin],
+      imgSrc: ["'self'", "data:", "blob:"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  xssFilter: true,
+  noSniff: true,
 }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));

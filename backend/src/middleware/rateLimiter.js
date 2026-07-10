@@ -37,8 +37,20 @@ const loginLimiter = rateLimit({
   },
 });
 
+const registrationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isTest,
+  message: {
+    message: 'Too many registration attempts, please try again later',
+  },
+});
+
 module.exports = {
   adminLimiter,
   studentLimiter,
   loginLimiter,
+  registrationLimiter,
 };

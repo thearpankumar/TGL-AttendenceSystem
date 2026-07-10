@@ -8,6 +8,12 @@ const { isoUint8Array } = require('@simplewebauthn/server/helpers');
 const crypto = require('crypto');
 const config = require('../config');
 
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
 const rpName = config.webauthn.rpName;
 const rpID = config.webauthn.rpID;
 const origin = config.webauthn.origin;
@@ -38,9 +44,9 @@ async function createRegistrationOptions(userId, userName, displayName, excludeC
       transports: cred.transports || [],
     })),
     authenticatorSelection: {
-      authenticatorAttachment: 'platform',
-      userVerification: 'preferred',
-      residentKey: 'preferred',
+      userVerification: 'required',
+      residentKey: 'required',
+      requireResidentKey: true,
     },
     supportedAlgorithmIDs: [-7, -257],
   });
@@ -71,7 +77,17 @@ async function createAuthenticationOptions(allowCredentials = []) {
       type: 'public-key',
       transports: cred.transports || [],
     })),
-    userVerification: 'preferred',
+    userVerification: 'required',
+  });
+  
+  return options;
+}
+
+async function createAuthenticationOptionsWithoutCredentials() {
+  const options = await generateAuthenticationOptions({
+    rpID,
+    allowCredentials: [],
+    userVerification: 'required',
   });
   
   return options;
@@ -103,15 +119,24 @@ function getVerificationMethod(authenticatorData) {
   
   const flags = authenticatorData.flags || 0;
   
-  if (flags & 0x04) {
-    return 'face_id';
+  const UV_FLAG = 0x04;
+  const UP_FLAG = 0x01;
+  const BE_FLAG = 0x08;
+  const BS_FLAG = 0x10;
+  
+  if (flags & UV_FLAG && flags & UP_FLAG) {
+    return 'biometric_verified';
   }
   
-  if (flags & 0x01) {
-    return 'fingerprint';
+  if (flags & UP_FLAG && !(flags & UV_FLAG)) {
+    return 'presence_only';
   }
   
-  return 'passkey_fallback';
+  if (flags & BE_FLAG) {
+    return 'backup_eligible';
+  }
+  
+  return 'unknown';
 }
 
 function getAuthenticatorAttachment(userAgent) {
@@ -137,7 +162,9 @@ module.exports = {
   createRegistrationOptions,
   verifyRegistration,
   createAuthenticationOptions,
+  createAuthenticationOptionsWithoutCredentials,
   verifyAuthentication,
   getVerificationMethod,
   getAuthenticatorAttachment,
+  timingSafeEqual,
 };

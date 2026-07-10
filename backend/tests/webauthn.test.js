@@ -167,8 +167,9 @@ describe('WebAuthn Registration Start', () => {
     expect(res.body.challenge).toBeDefined();
     expect(res.body.rp).toBeDefined();
     expect(res.body.user).toBeDefined();
-    expect(res.body.authenticatorSelection.authenticatorAttachment).toBe('platform');
-    expect(res.body.authenticatorSelection.userVerification).toBe('preferred');
+    expect(res.body.authenticatorSelection.userVerification).toBe('required');
+    expect(res.body.authenticatorSelection.residentKey).toBe('required');
+    expect(res.body.authenticatorSelection.requireResidentKey).toBe(true);
   });
 
   it('should create challenge in database', async () => {
@@ -253,7 +254,7 @@ describe('WebAuthn Authentication Start', () => {
     expect(res.body.challenge).toBeDefined();
     expect(res.body.allowCredentials).toBeDefined();
     expect(res.body.allowCredentials[0].id).toBe('test-cred-id');
-    expect(res.body.userVerification).toBe('preferred');
+    expect(res.body.userVerification).toBe('required');
   });
 
   it('should create authentication challenge', async () => {
@@ -883,9 +884,9 @@ describe('WebAuthn Utility Functions', () => {
   it('should get correct verification method', () => {
     const { getVerificationMethod } = require('../src/utils/webauthnUtils');
     
-    expect(getVerificationMethod({ flags: 0x05 })).toBe('face_id');
-    expect(getVerificationMethod({ flags: 0x01 })).toBe('fingerprint');
-    expect(getVerificationMethod({ flags: 0x00 })).toBe('passkey_fallback');
+    expect(getVerificationMethod({ flags: 0x05 })).toBe('biometric_verified');
+    expect(getVerificationMethod({ flags: 0x01 })).toBe('presence_only');
+    expect(getVerificationMethod({ flags: 0x00 })).toBe('unknown');
     expect(getVerificationMethod(null)).toBe('unknown');
   });
 

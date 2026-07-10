@@ -14,7 +14,9 @@ function initializeStorage(config) {
         throw new Error('S3 configuration incomplete. Required: bucket, accessKeyId, secretAccessKey');
       }
       storageProvider = new S3Provider(config.s3);
-      console.log(`Storage initialized: AWS S3 (${config.s3.bucket})`);
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(`Storage initialized: AWS S3 (${config.s3.bucket})`);
+      }
       break;
 
     case 'cloudinary':
@@ -23,7 +25,9 @@ function initializeStorage(config) {
         throw new Error('Cloudinary configuration incomplete. Required: cloudName, apiKey, apiSecret');
       }
       storageProvider = new CloudinaryProvider(config.cloudinary);
-      console.log(`Storage initialized: Cloudinary (${config.cloudinary.cloudName})`);
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(`Storage initialized: Cloudinary (${config.cloudinary.cloudName})`);
+      }
       break;
   }
 

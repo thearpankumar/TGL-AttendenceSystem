@@ -188,8 +188,8 @@ export default function StudentScan() {
   };
 
   const register = async () => {
-    const name = prompt('Enter your full name for registration:');
-    if (!name || name.trim().length < 2) {
+    const name = studentName.trim();
+    if (!name || name.length < 2) {
       flash('Valid name required for registration.');
       return;
     }
@@ -273,6 +273,87 @@ export default function StudentScan() {
       const e = err as { name?: string; message?: string };
       if (e.name === 'NotAllowedError') flash('Authentication cancelled. Please try again.');
       else flash('Authentication failed: ' + e.message);
+    }
+  };
+
+  const authenticateWithConditionalUI = async () => {
+    try {
+      if (!window.PublicKeyCredential?.isConditionalMediationAvailable) {
+        flash('Conditional UI not supported. Use device biometric instead.');
+        return;
+      }
+      
+      const isAvailable = await PublicKeyCredential.isConditionalMediationAvailable();
+      if (!isAvailable) {
+        flash('Conditional UI not available. Use device biometric instead.');
+        return;
+      }
+      
+      flash('Detecting available passkeys...');
+      
+      const startRes = await fetch(`${API}/s/${shortCode}/webauthn/authenticate/conditional`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (!startRes.ok) {
+        const e = await startRes.json();
+        throw new Error(e.message);
+      }
+      
+      const opts = await startRes.json();
+      opts.challenge = fromB64url(opts.challenge);
+      
+      const abortController = new AbortController();
+      
+      const assertion = await navigator.credentials.get({
+        publicKey: opts,
+        mediation: 'conditional',
+        signal: abortController.signal,
+      }) as PublicKeyCredential;
+      
+      const resp = assertion.response as AuthenticatorAssertionResponse;
+      
+      let userHandle = null;
+      if (resp.userHandle) {
+        const decoder = new TextDecoder();
+        userHandle = decoder.decode(resp.userHandle);
+      }
+      
+      if (!userHandle) {
+        throw new Error('User identification not available from passkey');
+      }
+      
+      rollRef.current = userHandle;
+      setRollInput(userHandle);
+      
+      credentialRef.current = {
+        id: assertion.id,
+        rawId: toB64url(assertion.rawId),
+        response: {
+          authenticatorData: toB64url(resp.authenticatorData),
+          clientDataJSON: toB64url(resp.clientDataJSON),
+          signature: toB64url(resp.signature),
+          userHandle: resp.userHandle ? toB64url(resp.userHandle) : null,
+        },
+        type: assertion.type,
+      };
+      
+      setWebauthnVerified(true);
+      setVerifyMethod('Passkey verified');
+      flash('Identity verified with passkey!', true);
+      setStep('form');
+      getLocation();
+      loadCaptcha();
+    } catch (err) {
+      const e = err as { name?: string; message?: string };
+      if (e.name === 'AbortError') {
+        flash('Authentication cancelled.');
+      } else if (e.name === 'NotAllowedError') {
+        flash('No passkey selected or authentication cancelled.');
+      } else {
+        flash('Passkey authentication failed: ' + e.message);
+      }
     }
   };
 
@@ -407,6 +488,7 @@ export default function StudentScan() {
                     <input className="attend-input" placeholder="e.g. 21CS042" value={rollInput}
                       onChange={(e) => setRollInput(e.target.value.toUpperCase())}
                       onKeyDown={(e) => e.key === 'Enter' && handleCheckStatus()}
+                      autoComplete="username webauthn"
                       style={{ textTransform: 'uppercase' }} />
                   </div>
                   <button className="attend-btn" onClick={handleCheckStatus}>Check Status</button>
@@ -423,10 +505,28 @@ export default function StudentScan() {
                       ? 'Your device is enrolled. Verify your identity to continue.'
                       : 'No device enrolled. Register your biometric to continue.'}</span>
                   </div>
-                  <button className="attend-btn" onClick={isEnrolled ? authenticate : register} disabled={isSuspended}>
-                    {isEnrolled ? '🔐  Verify Identity' : '📱  Enroll Device'}
-                  </button>
-                  <button className="attend-btn-ghost" onClick={() => setStep('rollInput')}>← Back</button>
+                  {isEnrolled && !isSuspended && (
+                    <>
+                      <button className="attend-btn" onClick={authenticateWithConditionalUI}>
+                        🔐 Use Passkey Manager (Recommended)
+                      </button>
+                      <button className="attend-btn-ghost" onClick={authenticate}>
+                        📱 Use Device Biometric
+                      </button>
+                    </>
+                  )}
+                  {(!isEnrolled || isSuspended) && (
+                    <>
+                      <div className="attend-field" style={{ marginTop: 16 }}>
+                        <label>Full Name</label>
+                        <input className="attend-input" placeholder="Enter your full name" value={studentName} onChange={(e) => setStudentName(e.target.value)} disabled={isSuspended} />
+                      </div>
+                      <button className="attend-btn" onClick={register} disabled={isSuspended || studentName.trim().length < 2}>
+                        📱 Enroll Device
+                      </button>
+                    </>
+                  )}
+                  <button className="attend-btn-ghost" onClick={() => setStep('rollInput')} style={{ marginTop: 8 }}>← Back</button>
                 </>
               )}
 
