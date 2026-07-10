@@ -329,7 +329,12 @@ describe('Challenge Expiry', () => {
       .post(`/s/${testShortLink.shortCode}/webauthn/register/finish`)
       .send({
         rollNumber: 'ABC123',
-        credential: { id: 'test' },
+        credential: { 
+          id: 'test',
+          response: {
+            clientDataJSON: Buffer.from(JSON.stringify({ challenge: 'test-challenge' })).toString('base64url')
+          }
+        },
       });
     
     expect(res.status).toBe(400);
@@ -350,7 +355,12 @@ describe('Challenge Expiry', () => {
       .post(`/s/${testShortLink.shortCode}/webauthn/register/finish`)
       .send({
         rollNumber: 'ABC123',
-        credential: { id: 'test' },
+        credential: { 
+          id: 'test',
+          response: {
+            clientDataJSON: Buffer.from(JSON.stringify({ challenge: 'test-challenge' })).toString('base64url')
+          }
+        },
       });
     
     expect(res.status).toBe(400);

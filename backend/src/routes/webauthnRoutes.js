@@ -154,12 +154,21 @@ router.post('/:shortCode/webauthn/register/finish', registrationLimiter, require
       return res.status(400).json({ message: 'Roll number and credential required' });
     }
     
+    let clientChallenge;
+    try {
+      const clientDataJSON = Buffer.from(credential.response.clientDataJSON, 'base64url').toString('utf8');
+      clientChallenge = JSON.parse(clientDataJSON).challenge;
+    } catch (_e) {
+      return res.status(400).json({ message: 'Invalid clientDataJSON' });
+    }
+    
     const storedChallenge = await WebAuthnChallenge.findOne({
       studentId: rollNumber.toUpperCase(),
       type: 'registration',
+      challenge: clientChallenge,
       used: false,
       expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    });
     
     if (!storedChallenge) {
       return res.status(400).json({ message: 'No valid registration challenge found' });
@@ -347,8 +356,17 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       return res.status(400).json({ message: 'Roll number required (via userHandle or body)' });
     }
     
+    let clientChallenge;
+    try {
+      const clientDataJSON = Buffer.from(credential.response.clientDataJSON, 'base64url').toString('utf8');
+      clientChallenge = JSON.parse(clientDataJSON).challenge;
+    } catch (_e) {
+      return res.status(400).json({ message: 'Invalid clientDataJSON' });
+    }
+
     const query = {
       type: 'authentication',
+      challenge: clientChallenge,
       used: false,
       expiresAt: { $gt: new Date() },
     };
@@ -357,8 +375,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       query.studentId = rollNumber.toUpperCase();
     }
     
-    const storedChallenge = await WebAuthnChallenge.findOne(query)
-      .sort({ createdAt: -1 });
+    const storedChallenge = await WebAuthnChallenge.findOne(query);
     
     if (!storedChallenge) {
       return res.status(400).json({ message: 'No valid authentication challenge found' });
