@@ -62,7 +62,8 @@ export default function StudentScan() {
   const streamRef = useRef<MediaStream | null>(null);
   const credentialRef = useRef<object | null>(null);
   const rollRef = useRef('');
-  const fingerRef = useRef('');
+  const fingerRef = useRef('unknown');
+  const conditionalUiAbortRef = useRef<AbortController | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement>(null);
 
   const flash = (text: string, ok = false) => {
@@ -112,6 +113,17 @@ export default function StudentScan() {
       streamRef.current?.getTracks().forEach(t => t.stop()); 
     };
   }, [shortCode, API, loadCaptcha]);
+
+  useEffect(() => {
+    if (step === 'rollInput') {
+      startConditionalUI();
+    }
+    return () => {
+      if (conditionalUiAbortRef.current) {
+        conditionalUiAbortRef.current.abort();
+      }
+    };
+  }, [step]);
 
   const initCamera = async (signal?: AbortSignal, bypassFlag?: boolean) => {
     try {
@@ -187,6 +199,13 @@ export default function StudentScan() {
     const roll = rollInput.trim().toUpperCase();
     if (!roll) { flash('Please enter your roll number'); return; }
     if (!/^[A-Z0-9]{3,20}$/.test(roll)) { flash('Invalid roll number format'); return; }
+    
+    // Cancel any pending conditional UI request before moving to manual flow
+    if (conditionalUiAbortRef.current) {
+      conditionalUiAbortRef.current.abort();
+      conditionalUiAbortRef.current = null;
+    }
+
     rollRef.current = roll;
     try {
       const res = await fetch(`${API}/s/${shortCode}/webauthn/status/${roll}`);
@@ -304,35 +323,22 @@ export default function StudentScan() {
     }
   };
 
-  const authenticateWithConditionalUI = async () => {
+  const startConditionalUI = async () => {
     try {
-      if (!window.PublicKeyCredential?.isConditionalMediationAvailable) {
-        flash('Conditional UI not supported. Use device biometric instead.');
-        return;
-      }
-      
+      if (!window.PublicKeyCredential?.isConditionalMediationAvailable) return;
       const isAvailable = await PublicKeyCredential.isConditionalMediationAvailable();
-      if (!isAvailable) {
-        flash('Conditional UI not available. Use device biometric instead.');
-        return;
-      }
-      
-      flash('Detecting available passkeys...');
+      if (!isAvailable) return;
       
       const startRes = await fetch(`${API}/s/${shortCode}/webauthn/authenticate/conditional`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      
-      if (!startRes.ok) {
-        const e = await startRes.json();
-        throw new Error(e.message);
-      }
-      
+      if (!startRes.ok) return;
       const opts = await startRes.json();
       opts.challenge = fromB64url(opts.challenge);
       
       const abortController = new AbortController();
+      conditionalUiAbortRef.current = abortController;
       
       const assertion = await navigator.credentials.get({
         publicKey: opts,
@@ -341,16 +347,12 @@ export default function StudentScan() {
       }) as PublicKeyCredential;
       
       const resp = assertion.response as AuthenticatorAssertionResponse;
-      
       let userHandle = null;
       if (resp.userHandle) {
         const decoder = new TextDecoder();
         userHandle = decoder.decode(resp.userHandle);
       }
-      
-      if (!userHandle) {
-        throw new Error('User identification not available from passkey');
-      }
+      if (!userHandle) throw new Error('User identification not available from passkey');
       
       rollRef.current = userHandle;
       setRollInput(userHandle);
@@ -375,12 +377,10 @@ export default function StudentScan() {
       loadCaptcha();
     } catch (err) {
       const e = err as { name?: string; message?: string };
-      if (e.name === 'AbortError') {
-        flash('Authentication cancelled.');
-      } else if (e.name === 'NotAllowedError') {
-        flash('No passkey selected or authentication cancelled.');
-      } else {
-        flash('Passkey authentication failed: ' + e.message);
+      // Ignore background errors for conditional UI
+      // If it fails, the user simply proceeds with the manual fallback flow.
+      if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
+        // Silently swallow other errors
       }
     }
   };
@@ -554,14 +554,9 @@ export default function StudentScan() {
                       : 'No device enrolled. Register your biometric to continue.'}</span>
                   </div>
                   {isEnrolled && !isSuspended && (
-                    <>
-                      <button className="attend-btn" onClick={authenticateWithConditionalUI}>
-                        🔐 Use Passkey Manager (Recommended)
-                      </button>
-                      <button className="attend-btn-ghost" onClick={authenticate}>
-                        📱 Use Device Biometric
-                      </button>
-                    </>
+                    <button className="attend-btn" onClick={authenticate}>
+                      🔑 Verify Identity (Passkey / Phone)
+                    </button>
                   )}
                   {(!isEnrolled || isSuspended) && (
                     <>
