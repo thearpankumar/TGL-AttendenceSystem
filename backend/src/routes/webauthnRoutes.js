@@ -8,6 +8,7 @@ const WebAuthnChallenge = require('../models/WebAuthnChallenge');
 const Device = require('../models/Device');
 const Flag = require('../models/Flag');
 const PhotoHash = require('../models/PhotoHash');
+const SystemConfig = require('../models/SystemConfig');
 const { studentLimiter, registrationLimiter } = require('../middleware/rateLimiter');
 const { requireMobileDevice } = require('../middleware/mobileCheck');
 const { getStorageProvider } = require('../storage');
@@ -325,6 +326,9 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       captchaAnswer,
       captchaId,
       deviceFingerprint,
+      devBypassCamera = false,
+      devBypassGps = false,
+      devBypassWebauthn = false,
     } = req.body;
     
     if (!credential) {
@@ -445,7 +449,10 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     storedChallenge.used = true;
     await storedChallenge.save();
     
-    if (process.env.NODE_ENV !== 'test') {
+    const systemConfig = await SystemConfig.findOne();
+    const isDevBypassAll = systemConfig?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+
+    if (process.env.NODE_ENV !== 'test' && !isDevBypassAll) {
       if (!captchaAnswer || !captchaId) {
         return res.status(400).json({ message: 'Captcha verification inputs missing' });
       }
@@ -492,7 +499,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
         const base64Data = photo.split(',')[1];
         const photoBuffer = Buffer.from(base64Data, 'base64');
         
-        if (process.env.FACE_DETECTION_DISABLED !== 'true') {
+        if (process.env.FACE_DETECTION_DISABLED !== 'true' && !(isDevBypassAll && devBypassCamera)) {
           try {
             await validateImage(photoBuffer);
           } catch (validationError) {
@@ -567,14 +574,19 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       return res.status(400).json({ message: 'Photo is required' });
     }
     
-    const distance = calculateDistance(
+    let distance = calculateDistance(
       latitude,
       longitude,
       session.locationId.latitude,
       session.locationId.longitude
     );
     
-    const isWithinGeofence = distance <= session.locationId.radiusMeters;
+    let isWithinGeofence = distance <= session.locationId.radiusMeters;
+
+    if (isDevBypassAll && devBypassGps) {
+      distance = 0;
+      isWithinGeofence = true;
+    }
     
     let networkProvider = 'Unknown';
     let networkOrg = 'Unknown';
@@ -667,6 +679,8 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     const verificationMethod = getVerificationMethod(credential.response?.authenticatorData);
     const authenticatorAttachment = getAuthenticatorAttachment(req.get('User-Agent'));
     
+    const isBypassed = isDevBypassAll && (devBypassCamera || devBypassGps || devBypassWebauthn);
+
     const attendance = await Attendance.create({
       sessionId: session._id,
       studentName,
@@ -693,6 +707,9 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       webauthnCounter: newCounter,
       webauthnReplayAttack: replayAttack,
       flagReviewed: false,
+      flagged: isBypassed,
+      flagReason: isBypassed ? 'DEV_BYPASS_ENABLED' : null,
+      flagDetails: isBypassed ? `Camera:${devBypassCamera}, GPS:${devBypassGps}, WebAuthn:${devBypassWebauthn}` : null,
     });
     
     const responseMessage = replayAttack

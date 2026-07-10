@@ -112,6 +112,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - MONGODB_POOL_MAX=${MONGODB_POOL_MAX:-300}
       - MONGODB_POOL_MIN=${MONGODB_POOL_MIN:-20}
+      - DEV_BYPASS_ALL=${DEV_BYPASS_ALL:-false}
     deploy:
       replicas: 3
       resources:
@@ -160,7 +161,7 @@ services:
     build:
       context: ./frontend/student
       args:
-        VITE_BYPASS_MOBILE_CHECK: ${VITE_BYPASS_MOBILE_CHECK:-false}
+        VITE_DEV_BYPASS_ALL: ${DEV_BYPASS_ALL:-false}
     container_name: attendance-student
     restart: unless-stopped
     ports:

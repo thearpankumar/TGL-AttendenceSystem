@@ -1,6 +1,7 @@
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const WebAuthnCredential = require('../models/WebAuthnCredential');
+const SystemConfig = require('../models/SystemConfig');
 const { getStorageProvider } = require('../storage');
 const { calculateDistance } = require('../utils/geoUtils');
 const { getCachedSession } = require('../middleware/sessionCache');
@@ -95,10 +96,16 @@ const submitAttendance = async (req, res) => {
       captchaId,
       deviceFingerprint,
       webauthnVerified = false,
+      devBypassCamera = false,
+      devBypassGps = false,
+      devBypassWebauthn = false,
     } = req.body;
 
-    // Verify Captcha (bypass in testing)
-    if (process.env.NODE_ENV !== 'test') {
+    const systemConfig = await SystemConfig.findOne();
+    const isDevBypassAll = systemConfig?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+
+    // Verify Captcha (bypass in testing and dev mode)
+    if (process.env.NODE_ENV !== 'test' && !isDevBypassAll) {
       if (!captchaAnswer || !captchaId) {
         return res.status(400).json({ message: 'Captcha verification inputs missing' });
       }
@@ -165,7 +172,9 @@ const submitAttendance = async (req, res) => {
     const credential = await WebAuthnCredential.findOne({ studentId: rollNumber.toUpperCase() });
     let actualWebauthnVerified = false;
 
-    if (credential) {
+    if (isDevBypassAll && devBypassWebauthn) {
+      actualWebauthnVerified = true;
+    } else if (credential) {
       if (webauthnVerified) {
         const enrolledRecently = (Date.now() - credential.enrolledAt.getTime()) < 15 * 60 * 1000;
         if (enrolledRecently) {
@@ -218,14 +227,19 @@ const submitAttendance = async (req, res) => {
       });
     }
 
-    const distance = calculateDistance(
+    let distance = calculateDistance(
       latitude,
       longitude,
       session.locationId.latitude,
       session.locationId.longitude
     );
 
-    const isWithinGeofence = distance <= session.locationId.radiusMeters;
+    let isWithinGeofence = distance <= session.locationId.radiusMeters;
+
+    if (isDevBypassAll && devBypassGps) {
+      distance = 0;
+      isWithinGeofence = true;
+    }
 
     let networkProvider = 'Unknown';
     let networkOrg = 'Unknown';
@@ -254,6 +268,8 @@ const submitAttendance = async (req, res) => {
       }
     }
 
+    const isBypassed = isDevBypassAll && (devBypassCamera || devBypassGps || devBypassWebauthn);
+
     const attendance = await Attendance.create({
       sessionId: session._id,
       studentName,
@@ -275,6 +291,9 @@ const submitAttendance = async (req, res) => {
       deviceFlag: deviceValidation.deviceFlag || null,
       webauthnVerified: actualWebauthnVerified,
       flagReviewed: false,
+      flagged: isBypassed,
+      flagReason: isBypassed ? 'DEV_BYPASS_ENABLED' : null,
+      flagDetails: isBypassed ? `Camera:${devBypassCamera}, GPS:${devBypassGps}, WebAuthn:${devBypassWebauthn}` : null,
     });
 
     const responseMessage = deviceValidation.flags && deviceValidation.flags.length > 0

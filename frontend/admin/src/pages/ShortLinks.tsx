@@ -118,8 +118,15 @@ const ShortLinks = () => {
       </div>
     ) : <span style={{ color: 'var(--color-faint)' }}>Not attached</span> },
     { key: 'status', label: 'Status', width: '11%', render: (l) => {
-      const isActive = l.isActive && l.sessionId?.isActive;
-      return <Badge tone={isActive ? 'success' : 'warning'}>{isActive ? 'Active' : 'Inactive'}</Badge>;
+      if (!l.isActive) return <Badge tone="neutral">Deactivated</Badge>;
+      if (!l.sessionId) return <Badge tone="neutral">Unassigned</Badge>;
+      
+      const sessionExpired = l.sessionId.expiresAt && new Date(l.sessionId.expiresAt) < new Date();
+      if (!l.sessionId.isActive || sessionExpired) {
+        return <Badge tone="danger">Expired</Badge>;
+      }
+      
+      return <Badge tone="success">Active</Badge>;
     }},
     { key: 'clicks',  label: 'Clicks',  width: '8%',  align: 'center', render: (l) => l.clickCount || 0 },
     { key: 'created', label: 'Created', width: '11%', render: (l) => new Date(l.createdAt).toLocaleDateString() },

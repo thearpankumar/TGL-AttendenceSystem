@@ -29,6 +29,7 @@ export default function StudentScan() {
   const [errMsg, setErrMsg] = useState('');
   const [flashMsg, setFlashMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [devBypassEnabled, setDevBypassEnabled] = useState(false);
 
 
 
@@ -49,6 +50,8 @@ export default function StudentScan() {
   const [webauthnVerified, setWebauthnVerified] = useState(false);
   const [verifyMethod, setVerifyMethod] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [usedDevBypassCamera, setUsedDevBypassCamera] = useState(false);
+  const [usedDevBypassGps, setUsedDevBypassGps] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +87,7 @@ export default function StudentScan() {
         const data = await res.json();
         if (ac.signal.aborted) return;
         setSession({ locationName: data.session.locationName, expiresAt: data.session.expiresAt });
+        setDevBypassEnabled(!!data.devBypassEnabled);
         setStep('rollInput');
         await initCamera(ac.signal);
         await loadCaptcha();
@@ -116,6 +120,10 @@ export default function StudentScan() {
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); }
     } catch (err) {
+      if (devBypassEnabled) {
+        flash('Camera error, but DEV bypass is available.', true);
+        return;
+      }
       const e = err as { name: string; message: string };
       const msgs: Record<string, string> = {
         NotAllowedError: 'Camera permission denied. Enable camera in browser settings and refresh.',
@@ -164,6 +172,13 @@ export default function StudentScan() {
     );
   }, []);
 
+  const handleDevBypassGps = () => {
+    setUsedDevBypassGps(true);
+    setLocData({ latitude: 0, longitude: 0 });
+    setLocStatus('ok');
+    flash('Injected mock location for DEV', true);
+  };
+
   const handleCheckStatus = async () => {
     const roll = rollInput.trim().toUpperCase();
     if (!roll) { flash('Please enter your roll number'); return; }
@@ -182,6 +197,15 @@ export default function StudentScan() {
   const handleFallback = () => {
     setWebauthnVerified(false);
     setVerifyMethod('⚠️ Manual verification required');
+    setStep('form');
+    getLocation();
+    loadCaptcha();
+  };
+
+  const handleDevBypassWebAuthn = () => {
+    setWebauthnVerified(true);
+    setVerifyMethod('Bypassed (DEV)');
+    flash('Identity bypassed in DEV mode!', true);
     setStep('form');
     getLocation();
     loadCaptcha();
@@ -362,6 +386,7 @@ export default function StudentScan() {
       // Retake
       photoDataRef.current = '';
       setPhotoTaken(false);
+      setUsedDevBypassCamera(false);
       if (videoRef.current && canvasRef.current) {
         videoRef.current.style.display = 'block';
         canvasRef.current.style.display = 'none';
@@ -377,6 +402,13 @@ export default function StudentScan() {
     photoDataRef.current = canvas.toDataURL('image/jpeg', 0.75);
     canvas.style.display = 'block';
     video.style.display = 'none';
+    setPhotoTaken(true);
+  };
+
+  const handleDevBypassCamera = () => {
+    setUsedDevBypassCamera(true);
+    photoDataRef.current = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    if (videoRef.current) videoRef.current.style.display = 'none';
     setPhotoTaken(true);
   };
 
@@ -402,6 +434,9 @@ export default function StudentScan() {
         captchaId,
         deviceFingerprint: fingerRef.current,
         webauthnVerified,
+        devBypassCamera: usedDevBypassCamera,
+        devBypassGps: usedDevBypassGps,
+        devBypassWebauthn: devBypassEnabled && !credentialRef.current,
       };
       if (credentialRef.current) body.credential = credentialRef.current;
 
@@ -444,6 +479,11 @@ export default function StudentScan() {
         <button type="button" className={`attend-capture-btn${photoTaken ? ' retake' : ''}`} onClick={handleCapture}>
           {photoTaken ? '↺  Retake photo' : '◉  Capture photo'}
         </button>
+        {devBypassEnabled && !photoTaken && (
+          <button type="button" className="attend-btn-ghost" onClick={handleDevBypassCamera} style={{ marginTop: 8, color: '#667085', borderColor: '#d0d5dd' }}>
+            🛠️ Use Mock Photo (DEV)
+          </button>
+        )}
       </div>
     </div>
   );
@@ -491,7 +531,7 @@ export default function StudentScan() {
                       autoComplete="username webauthn"
                       style={{ textTransform: 'uppercase' }} />
                   </div>
-                  <button className="attend-btn" onClick={handleCheckStatus}>Check Status</button>
+                  <button className="attend-btn" onClick={handleCheckStatus} style={{ marginTop: 16 }}>Check Status</button>
                 </>
               )}
 
@@ -517,7 +557,7 @@ export default function StudentScan() {
                   )}
                   {(!isEnrolled || isSuspended) && (
                     <>
-                      <div className="attend-field" style={{ marginTop: 16 }}>
+                      <div className="attend-field" style={{ marginTop: 16, marginBottom: 16 }}>
                         <label>Full Name</label>
                         <input className="attend-input" placeholder="Enter your full name" value={studentName} onChange={(e) => setStudentName(e.target.value)} disabled={isSuspended} />
                       </div>
@@ -525,6 +565,11 @@ export default function StudentScan() {
                         📱 Enroll Device
                       </button>
                     </>
+                  )}
+                  {devBypassEnabled && (
+                    <button className="attend-btn-ghost" style={{ marginTop: 16, border: '1px dashed #667085', color: '#667085' }} onClick={handleDevBypassWebAuthn}>
+                      🛠️ Bypass Biometrics (DEV)
+                    </button>
                   )}
                   <button className="attend-btn-ghost" onClick={() => setStep('rollInput')} style={{ marginTop: 8 }}>← Back</button>
                 </>
@@ -560,6 +605,11 @@ export default function StudentScan() {
                   <strong>{locStatus === 'ok' ? 'Location acquired' : locStatus === 'denied' ? 'Location denied' : 'Getting location…'}</strong>
                   {locStatus === 'ok' && <div className="detail">{locData?.latitude.toFixed(5)}, {locData?.longitude.toFixed(5)}</div>}
                   {locStatus === 'denied' && <div className="detail">Attendance may be unverified.</div>}
+                  {devBypassEnabled && locStatus !== 'ok' && (
+                    <button type="button" className="attend-btn-ghost" onClick={handleDevBypassGps} style={{ width: 'auto', padding: '2px 8px', marginTop: 4 }}>
+                      🛠️ Mock Location
+                    </button>
+                  )}
                 </span>
               </div>
 

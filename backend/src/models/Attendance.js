@@ -136,6 +136,18 @@ const attendanceSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  flagged: {
+    type: Boolean,
+    default: false,
+  },
+  flagReason: {
+    type: String,
+    default: null,
+  },
+  flagDetails: {
+    type: String,
+    default: null,
+  },
   capturedAt: {
     type: Date,
     default: Date.now,

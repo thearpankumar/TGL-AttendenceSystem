@@ -470,6 +470,46 @@ describe('Attendance Model Edge Cases', () => {
       expect(attendance.capturedAt.getTime()).toBeLessThanOrEqual(afterCreate.getTime() + 1000);
     });
   });
+  describe('DEV Bypass Audit Logging', () => {
+    test('should store bypass flags correctly', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'Bypass Student',
+        rollNumber: '21CS114',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo136',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 0,
+        verified: true,
+        flagged: true,
+        flagReason: 'DEV_BYPASS_ENABLED',
+        flagDetails: 'Camera:true, GPS:false, WebAuthn:true'
+      });
+      
+      expect(attendance.flagged).toBe(true);
+      expect(attendance.flagReason).toBe('DEV_BYPASS_ENABLED');
+      expect(attendance.flagDetails).toBe('Camera:true, GPS:false, WebAuthn:true');
+    });
+
+    test('should default flagged to false', async () => {
+      const attendance = await Attendance.create({
+        sessionId: session._id,
+        studentName: 'Normal Student',
+        rollNumber: '21CS115',
+        photoUrl: 'https://example.com/photo.jpg',
+        photoPublicId: 'photo137',
+        studentLatitude: 12.971,
+        studentLongitude: 77.594,
+        distanceFromLocation: 50,
+        verified: true
+      });
+      
+      expect(attendance.flagged).toBe(false);
+      expect(attendance.flagReason).toBeNull();
+      expect(attendance.flagDetails).toBeNull();
+    });
+  });
 });
 
 describe('Session Expiry Tests', () => {

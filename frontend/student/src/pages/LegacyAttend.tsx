@@ -35,6 +35,7 @@ export default function LegacyAttend() {
   const [errMsg, setErrMsg] = useState('');
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [devBypassEnabled, setDevBypassEnabled] = useState(false);
 
   const [name, setName] = useState('');
   const [roll, setRoll] = useState('');
@@ -45,6 +46,8 @@ export default function LegacyAttend() {
   const [locMsg, setLocMsg] = useState<{ title: string; detail: string; ok: boolean }>({ title: 'Requesting Location...', detail: 'Allow location when your browser prompts.', ok: false });
   const [photoTaken, setPhotoTaken] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [usedDevBypassCamera, setUsedDevBypassCamera] = useState(false);
+  const [usedDevBypassGps, setUsedDevBypassGps] = useState(false);
   const [distanceInfo, setDistanceInfo] = useState('');
   const [flashMsg, setFlashMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -106,6 +109,12 @@ export default function LegacyAttend() {
     );
   }, []);
 
+  const handleDevBypassGps = () => {
+    setUsedDevBypassGps(true);
+    setLoc({ latitude: 0, longitude: 0, accuracy: 5 });
+    setLocMsg({ title: '✓ Location Bypassed (DEV)', detail: 'Using mock coordinates', ok: true });
+  };
+
   const initCamera = useCallback(async (signal?: AbortSignal) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
@@ -116,6 +125,10 @@ export default function LegacyAttend() {
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); }
     } catch (err) {
+      if (devBypassEnabled) {
+        flash('Camera error, but DEV bypass is available.', true);
+        return;
+      }
       if (signal?.aborted) return;
       const e = err as { name: string; message: string };
       const msgs: Record<string, string> = {
@@ -143,6 +156,7 @@ export default function LegacyAttend() {
         if (new Date(sessData.session.expiresAt) < new Date()) throw new Error('This attendance session has expired');
         setStorageInfo(stor);
         setSession(sessData.session);
+        setDevBypassEnabled(!!sessData.devBypassEnabled);
         setStep('form');
         await Promise.all([loadCaptcha(), initCamera(ac.signal)]);
         if (!ac.signal.aborted) getLocation();
@@ -172,6 +186,7 @@ export default function LegacyAttend() {
       photoDataRef.current = '';
       faceDetectedRef.current = true;
       setPhotoTaken(false);
+      setUsedDevBypassCamera(false);
       if (videoRef.current) videoRef.current.style.display = 'block';
       if (canvasRef.current) canvasRef.current.style.display = 'none';
       return;
@@ -202,6 +217,14 @@ export default function LegacyAttend() {
     }
   };
 
+  const handleDevBypassCamera = () => {
+    setUsedDevBypassCamera(true);
+    photoDataRef.current = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    faceDetectedRef.current = true;
+    if (videoRef.current) videoRef.current.style.display = 'none';
+    setPhotoTaken(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loc) { flash('Location required. Please allow location access.'); return; }
@@ -217,9 +240,9 @@ export default function LegacyAttend() {
         const blob = await (await fetch(photoDataRef.current)).blob();
         const upRes = await fetch(urlData.uploadUrl, { method: urlData.method, headers: urlData.headers || {}, body: blob });
         if (!upRes.ok) throw new Error('Photo upload failed');
-        body = { studentName: name.trim(), rollNumber: roll.trim().toUpperCase(), directUpload: true, publicId: urlData.publicId, latitude: loc.latitude, longitude: loc.longitude, faceDetected: faceDetectedRef.current, captchaAnswer: captchaAnswer.trim(), captchaId };
+        body = { studentName: name.trim(), rollNumber: roll.trim().toUpperCase(), directUpload: true, publicId: urlData.publicId, latitude: loc.latitude, longitude: loc.longitude, faceDetected: faceDetectedRef.current, captchaAnswer: captchaAnswer.trim(), captchaId, devBypassCamera: usedDevBypassCamera, devBypassGps: usedDevBypassGps };
       } else {
-        body = { studentName: name.trim(), rollNumber: roll.trim().toUpperCase(), photo: photoDataRef.current, latitude: loc.latitude, longitude: loc.longitude, faceDetected: faceDetectedRef.current, captchaAnswer: captchaAnswer.trim(), captchaId };
+        body = { studentName: name.trim(), rollNumber: roll.trim().toUpperCase(), photo: photoDataRef.current, latitude: loc.latitude, longitude: loc.longitude, faceDetected: faceDetectedRef.current, captchaAnswer: captchaAnswer.trim(), captchaId, devBypassCamera: usedDevBypassCamera, devBypassGps: usedDevBypassGps };
       }
 
       const res = await fetch(`${API}/s/${shortCode}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -298,6 +321,11 @@ export default function LegacyAttend() {
               <button type="button" className={`attend-capture-btn${photoTaken ? ' retake' : ''}`} onClick={handleCapture}>
                 {photoTaken ? '↺  Retake photo' : '◉  Capture photo'}
               </button>
+              {devBypassEnabled && !photoTaken && (
+                <button type="button" className="attend-btn-ghost" onClick={handleDevBypassCamera} style={{ marginTop: 8, color: '#667085', borderColor: '#d0d5dd' }}>
+                  🛠️ Use Mock Photo (DEV)
+                </button>
+              )}
               <div className="attend-panel">
                 <div className="attend-panel-label">Session expires</div>
                 <div className="attend-panel-value">{new Date(session.expiresAt).toLocaleString()}</div>
@@ -319,6 +347,11 @@ export default function LegacyAttend() {
                   <strong>{locMsg.title.replace(/[⚠✓]\s?/g, '')}</strong>
                   <div className="detail">{locMsg.detail}</div>
                   {!locMsg.ok && <button type="button" className="attend-btn-ghost" style={{ width: 'auto', padding: 0, marginTop: 4 }} onClick={getLocation}>Retry location</button>}
+                  {devBypassEnabled && !locMsg.ok && (
+                    <button type="button" className="attend-btn-ghost" onClick={handleDevBypassGps} style={{ width: 'auto', padding: '2px 8px', marginTop: 4, marginLeft: 8 }}>
+                      🛠️ Mock Location
+                    </button>
+                  )}
                 </span>
               </div>
 

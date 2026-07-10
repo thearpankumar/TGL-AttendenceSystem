@@ -10,6 +10,7 @@ import ShortLinks from './pages/ShortLinks';
 import QRDisplay from './pages/QRDisplay';
 import FlaggedAttendance from './pages/FlaggedAttendance';
 import WebAuthnCredentials from './pages/WebAuthnCredentials';
+import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import AppShell from './components/layout/AppShell';
 import type { ReactNode } from 'react';
@@ -36,6 +37,7 @@ function App() {
         <Route path="/shortlinks" element={<PrivateRoute><ShortLinks /></PrivateRoute>} />
         <Route path="/flagged" element={<PrivateRoute><FlaggedAttendance /></PrivateRoute>} />
         <Route path="/webauthn" element={<PrivateRoute><WebAuthnCredentials /></PrivateRoute>} />
+        <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <ToastContainer position="top-right" autoClose={3000} />

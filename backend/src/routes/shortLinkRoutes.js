@@ -6,6 +6,7 @@ const Attendance = require('../models/Attendance');
 const Location = require('../models/Location');
 const Device = require('../models/Device');
 const WebAuthnCredential = require('../models/WebAuthnCredential');
+const SystemConfig = require('../models/SystemConfig');
 const { studentLimiter } = require('../middleware/rateLimiter');
 const { validateQRToken } = require('../utils/totpUtils');
 const { requireMobileDevice } = require('../middleware/mobileCheck');
@@ -434,6 +435,9 @@ router.get('/:shortCode/session', studentLimiter, requireMobileDevice, async (re
       }
     }
 
+    const config = await SystemConfig.findOne();
+    const isDevBypassAll = config?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+
     res.json({
       valid: true,
       session: {
@@ -443,6 +447,7 @@ router.get('/:shortCode/session', studentLimiter, requireMobileDevice, async (re
         totpEnabled: session.totpEnabled,
       },
       shortLink: shortCode,
+      devBypassEnabled: isDevBypassAll,
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
