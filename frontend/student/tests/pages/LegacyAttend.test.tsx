@@ -2,6 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LegacyAttend from '../../src/pages/LegacyAttend';
+import * as useIsMobileModule from '../../src/hooks/useIsMobile';
+
+vi.mock('../../src/hooks/useIsMobile', () => ({
+  useIsMobile: vi.fn(),
+}));
 
 describe('LegacyAttend', () => {
   beforeEach(() => {
@@ -51,6 +56,8 @@ describe('LegacyAttend', () => {
       },
       configurable: true
     });
+
+    vi.mocked(useIsMobileModule.useIsMobile).mockReturnValue(true);
   });
 
   const renderComponent = () => render(

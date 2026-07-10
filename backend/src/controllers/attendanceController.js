@@ -102,7 +102,7 @@ const submitAttendance = async (req, res) => {
     } = req.body;
 
     const systemConfig = await SystemConfig.findOne();
-    const isDevBypassAll = systemConfig?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+    const isDevBypassAll = systemConfig ? systemConfig.devBypassEnabled : process.env.DEV_BYPASS_ALL === 'true';
 
     // Verify Captcha (bypass in testing and dev mode)
     if (process.env.NODE_ENV !== 'test' && !isDevBypassAll) {

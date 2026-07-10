@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useIsMobile';
+import MobileDeviceRequired from '../components/MobileDeviceRequired';
 
 /* ponytail: globals loaded via CDN in index.html */
 declare const FingerprintJS: { load(): Promise<{ get(): Promise<{ visitorId: string }> }> };
@@ -30,6 +32,7 @@ export default function StudentScan() {
   const [flashMsg, setFlashMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
+  const isMobile = useIsMobile();
 
 
 
@@ -487,6 +490,10 @@ export default function StudentScan() {
       </div>
     </div>
   );
+
+  if (!isMobile && !devBypassEnabled && step !== 'loading' && step !== 'error') {
+    return <MobileDeviceRequired />;
+  }
 
   return (
     <>

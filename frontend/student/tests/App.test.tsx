@@ -25,34 +25,8 @@ describe('App', () => {
     vi.clearAllMocks();
   });
 
-  it('renders MobileDeviceRequired when not on mobile device and bypass is false', () => {
-    vi.mocked(useIsMobileModule.useIsMobile).mockReturnValue(false);
-    vi.stubEnv('VITE_DEV_BYPASS_ALL', 'false');
-
+  it('renders application routing successfully', () => {
     render(<App />);
-    
-    expect(screen.getByTestId('mobile-required')).toBeInTheDocument();
-    expect(screen.queryByTestId('student-scan')).not.toBeInTheDocument();
-  });
-
-  it('renders application when on mobile device', () => {
-    vi.mocked(useIsMobileModule.useIsMobile).mockReturnValue(true);
-    vi.stubEnv('VITE_DEV_BYPASS_ALL', 'false');
-
-    render(<App />);
-    
-    // It should render the router, and since route is / it will probably render "Not found" 
-    // or one of the mocked pages if the route matches. 
-    // But MobileDeviceRequired should NOT be there.
-    expect(screen.queryByTestId('mobile-required')).not.toBeInTheDocument();
-  });
-
-  it('bypasses mobile check and renders application when VITE_DEV_BYPASS_ALL is true', () => {
-    vi.mocked(useIsMobileModule.useIsMobile).mockReturnValue(false);
-    vi.stubEnv('VITE_DEV_BYPASS_ALL', 'true');
-
-    render(<App />);
-    
     expect(screen.queryByTestId('mobile-required')).not.toBeInTheDocument();
   });
 });

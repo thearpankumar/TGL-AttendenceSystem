@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useIsMobile';
+import MobileDeviceRequired from '../components/MobileDeviceRequired';
 
 /* ponytail: face-api.js loaded via CDN in index.html */
 declare const faceapi: {
@@ -36,6 +38,7 @@ export default function LegacyAttend() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
+  const isMobile = useIsMobile();
 
   const [name, setName] = useState('');
   const [roll, setRoll] = useState('');
@@ -269,6 +272,10 @@ export default function LegacyAttend() {
       </svg>
     </div>
   );
+
+  if (!isMobile && !devBypassEnabled && step !== 'loading' && step !== 'error') {
+    return <MobileDeviceRequired />;
+  }
 
   return (
     <>

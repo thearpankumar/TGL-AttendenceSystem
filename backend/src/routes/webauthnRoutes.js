@@ -450,7 +450,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
     await storedChallenge.save();
     
     const systemConfig = await SystemConfig.findOne();
-    const isDevBypassAll = systemConfig?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+    const isDevBypassAll = systemConfig ? systemConfig.devBypassEnabled : process.env.DEV_BYPASS_ALL === 'true';
 
     if (process.env.NODE_ENV !== 'test' && !isDevBypassAll) {
       if (!captchaAnswer || !captchaId) {

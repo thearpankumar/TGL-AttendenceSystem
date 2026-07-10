@@ -12,6 +12,12 @@ window.matchMedia = window.matchMedia || function() {
   };
 };
 
+import * as useIsMobileModule from '../../src/hooks/useIsMobile';
+
+vi.mock('../../src/hooks/useIsMobile', () => ({
+  useIsMobile: vi.fn(),
+}));
+
 describe('StudentScan', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,6 +83,8 @@ describe('StudentScan', () => {
       value: mockGeolocation,
       configurable: true
     });
+
+    vi.mocked(useIsMobileModule.useIsMobile).mockReturnValue(true);
   });
 
   const renderComponent = () => render(

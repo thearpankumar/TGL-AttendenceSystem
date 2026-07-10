@@ -26,7 +26,7 @@ function App() {
   const { admin } = useAuth();
 
   return (
-    <BrowserRouter basename="/admin">
+    <BrowserRouter basename="/admin" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={admin ? <Navigate to="/" /> : <Login />} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

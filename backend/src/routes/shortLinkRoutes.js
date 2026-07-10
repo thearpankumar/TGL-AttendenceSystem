@@ -436,7 +436,7 @@ router.get('/:shortCode/session', studentLimiter, requireMobileDevice, async (re
     }
 
     const config = await SystemConfig.findOne();
-    const isDevBypassAll = config?.devBypassEnabled || process.env.DEV_BYPASS_ALL === 'true';
+    const isDevBypassAll = config ? config.devBypassEnabled : process.env.DEV_BYPASS_ALL === 'true';
 
     res.json({
       valid: true,
