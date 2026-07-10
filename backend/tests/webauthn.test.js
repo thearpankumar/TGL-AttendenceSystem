@@ -769,7 +769,7 @@ describe('WebAuthn Model Tests', () => {
     });
 
     expect(cred.deviceLabel).toBe('Unknown Device');
-    expect(cred.deviceType).toBe('multi_device');
+    expect(cred.deviceType).toBe('multiDevice');
     expect(cred.isSuspended).toBe(false);
     expect(cred.signCount).toBe(0);
   });

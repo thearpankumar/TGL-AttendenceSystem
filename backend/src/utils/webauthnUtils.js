@@ -95,6 +95,16 @@ async function createAuthenticationOptionsWithoutCredentials() {
 
 async function verifyAuthentication(authenticationResponse, expectedChallenge, credential) {
   try {
+    // Safely extract the public key into a pure Uint8Array
+    let pubKeyBytes;
+    if (Buffer.isBuffer(credential.publicKey)) {
+      pubKeyBytes = new Uint8Array(credential.publicKey.buffer, credential.publicKey.byteOffset, credential.publicKey.length);
+    } else if (credential.publicKey && credential.publicKey.type === 'Buffer' && Array.isArray(credential.publicKey.data)) {
+      pubKeyBytes = new Uint8Array(credential.publicKey.data);
+    } else {
+      pubKeyBytes = new Uint8Array(credential.publicKey);
+    }
+
     const verification = await verifyAuthenticationResponse({
       response: authenticationResponse,
       expectedChallenge,
@@ -102,7 +112,7 @@ async function verifyAuthentication(authenticationResponse, expectedChallenge, c
       expectedRPID: rpID,
       credential: {
         id: credential.credentialId,
-        publicKey: new Uint8Array(credential.publicKey.buffer || credential.publicKey),
+        publicKey: pubKeyBytes,
         counter: credential.counter,
         transports: credential.transports || [],
       },

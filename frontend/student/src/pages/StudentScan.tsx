@@ -586,9 +586,35 @@ export default function StudentScan() {
 
               {step === 'success' && (
                 <div className="attend-center">
-                  <div style={{ fontSize: 52 }}>✅</div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#027a48' }}>Attendance Recorded!</h3>
-                  <p style={{ fontSize: 13, color: '#667085' }}>Your attendance has been successfully submitted.</p>
+                  <div style={{ marginBottom: '16px' }}>
+                    <svg
+                      width="72"
+                      height="72"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#027a48"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ 
+                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        filter: 'drop-shadow(0px 4px 6px rgba(2, 122, 72, 0.2))' 
+                      }}
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  </div>
+                  <style>
+                    {`
+                      @keyframes pulse {
+                        0%, 100% { opacity: 1; transform: scale(1); }
+                        50% { opacity: 0.8; transform: scale(1.05); }
+                      }
+                    `}
+                  </style>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, color: '#027a48', marginBottom: '8px' }}>Attendance Recorded!</h3>
+                  <p style={{ fontSize: 14, color: '#667085' }}>Your attendance has been successfully submitted.</p>
                 </div>
               )}
             </div>
