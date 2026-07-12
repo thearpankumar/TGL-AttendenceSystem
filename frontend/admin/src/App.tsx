@@ -26,7 +26,7 @@ function App() {
   const { admin } = useAuth();
 
   return (
-    <BrowserRouter basename="/admin" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={admin ? <Navigate to="/" /> : <Login />} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

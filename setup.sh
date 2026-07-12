@@ -617,7 +617,7 @@ docker_compose_up() {
     
     echo ""
     print_info "Access the application at:"
-    echo -e "  ${GREEN}Admin Panel:${NC}    http://localhost/admin"
+    echo -e "  ${GREEN}Admin Panel:${NC}    http://localhost/owner-of-attendix-xyz"
     echo -e "  ${GREEN}Student Page:${NC}   http://localhost/attend/<token>"
     echo -e "  ${GREEN}API Health:${NC}     http://localhost/health"
 }

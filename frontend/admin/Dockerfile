@@ -1,4 +1,6 @@
 FROM node:24-slim AS builder
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
 
 WORKDIR /app
 COPY package*.json ./
