@@ -1,0 +1,152 @@
+# Observability stack: Prometheus (metrics) + Loki/Alloy (logs) + Grafana.
+# Opt-in, layered onto whichever app stack you're running — it redeclares
+# `web-net` (identical to docker-compose.yml/docker-compose.prod.yml) so
+# Compose merges it into the same project rather than requiring a separate
+# `external: true` network reference.
+#
+# Dev stack:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build
+# Prod stack:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.mongo.yml -f docker-compose.caddy.yml -f docker-compose.monitoring.yml up -d --build
+#
+# Nothing here requires app code changes. It already ships every container's
+# stdout/stderr (Caddy's JSON access logs, Mongo/Redis/backend console
+# output, ...) into Loki via Alloy's Docker log discovery. Prometheus scrapes
+# cAdvisor (per-container CPU/mem) and node-exporter (host CPU/mem/disk) —
+# both work with zero app instrumentation. A commented-out `backend` scrape
+# job is left in monitoring/prometheus/prometheus.yml for whenever
+# prom-client metrics get added to the app later.
+#
+# Only Grafana is reachable from outside, through Caddy at
+# /logging-grafana-main (see Caddyfile/Caddyfile.prod). Prometheus has no
+# login of its own, so it's internal-only: no host port, no Caddy route —
+# reachable solely as http://prometheus:9090 from other containers on
+# monitoring-net (that's exactly how Grafana's own datasource reaches it).
+services:
+
+  # Internal-only: no host port, no Caddy route. Stays on web-net only to
+  # scrape caddy:2019/metrics — not to be reached from it.
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: attendance-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    expose:
+      - "9090"
+    depends_on:
+      - cadvisor
+      - node-exporter
+    networks:
+      - monitoring-net
+      - web-net
+
+  # ponytail: on Docker Desktop (Mac/Windows) cAdvisor's container metrics
+  # are limited/best-effort — it runs inside the Desktop VM, not directly on
+  # the host. Fully accurate on a real Linux Docker host.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: attendance-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+    expose:
+      - "8080"
+    networks:
+      - monitoring-net
+
+  # ponytail: same Docker Desktop caveat as cAdvisor — reports the Desktop
+  # VM's host stats, not literally your Mac's, on non-Linux dev machines.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: attendance-node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    expose:
+      - "9100"
+    networks:
+      - monitoring-net
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: attendance-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    networks:
+      - monitoring-net
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: attendance-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: attendance-grafana
+    restart: unless-stopped
+    # Reached only through Caddy at /logging-grafana-main — no host port
+    # published. serve_from_sub_path=true + a matching root_url is required
+    # (Grafana's own router expects the full prefixed path — Caddy passes
+    # it through unstripped) or Grafana's emitted links/assets break.
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change-this-grafana-password}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost/logging-grafana-main/}
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring-net
+      - web-net
+
+volumes:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  grafana_data:
+
+networks:
+  monitoring-net:
+    driver: bridge
+  web-net:
+    driver: bridge

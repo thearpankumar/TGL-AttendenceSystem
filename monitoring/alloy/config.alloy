@@ -1,0 +1,32 @@
+// Discovers every container on the host via the Docker socket and ships
+// their stdout/stderr to Loki — this already works today (Caddy's JSON
+// access logs, Mongo/Redis logs, backend console output, etc). Any logging
+// you add to the app later flows through automatically, no config change
+// needed here.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = {"job" = "docker"}
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

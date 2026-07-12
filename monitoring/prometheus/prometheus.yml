@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Per-container CPU/memory/network — works out of the box, no app code needed.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Host-level CPU/memory/disk — works out of the box, no app code needed.
+  - job_name: node-exporter
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Caddy's built-in Prometheus metrics (needs `servers { metrics }` + a
+  # network-reachable `admin` listener in the Caddyfile — already set).
+  - job_name: caddy
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['caddy:2019']
+
+  # Uncomment once the backend exposes /metrics (e.g. via prom-client) —
+  # intentionally not added yet, no app code has been changed for this.
+  # - job_name: backend
+  #   static_configs:
+  #     - targets: ['backend:5000']
+  #   # Note: backend runs as a replicated service (deploy.replicas: 3 in
+  #   # prod) — a static_configs target only ever hits whichever replica
+  #   # Docker's round-robin DNS resolves first. Switch to dns_sd_configs
+  #   # (type: A, port: 5000) if you need all replicas scraped individually.
