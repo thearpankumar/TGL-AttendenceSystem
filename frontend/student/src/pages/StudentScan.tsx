@@ -2,11 +2,19 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useIsMobile } from '../hooks/useIsMobile';
 import MobileDeviceRequired from '../components/MobileDeviceRequired';
+import PermissionOnboarding from '../components/PermissionOnboarding';
+import HelpDrawer from '../components/HelpDrawer';
 
 /* ponytail: globals loaded via CDN in index.html */
 declare const FingerprintJS: { load(): Promise<{ get(): Promise<{ visitorId: string }> }> };
 
-type Step = 'loading' | 'error' | 'rollInput' | 'webauthnAction' | 'form' | 'success';
+type Step = 'loading' | 'permissions' | 'error' | 'rollInput' | 'webauthnAction' | 'form' | 'success';
+
+/** Detect privacy-focused Android OSes from the user agent string (best-effort) */
+const detectPrivacyOs = (): boolean => {
+  const ua = navigator.userAgent || '';
+  return /GrapheneOS|LineageOS|CalyxOS|DivestOS|microG/i.test(ua);
+};
 
 interface SessionInfo { locationName: string; expiresAt: string; }
 
@@ -82,8 +90,13 @@ export default function StudentScan() {
   }, [shortCode, API]);
 
 
+  // Ref to store devBypassEnabled for use in handleAcknowledge after session loads
+  const devBypassEnabledRef = useRef(false);
+  const initAbortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     const ac = new AbortController();
+    initAbortRef.current = ac;
     (async () => {
       try {
         const res = await fetch(`${API}/s/${shortCode}/session`, { signal: ac.signal });
@@ -91,16 +104,11 @@ export default function StudentScan() {
         const data = await res.json();
         if (ac.signal.aborted) return;
         setSession({ locationName: data.session.locationName, expiresAt: data.session.expiresAt });
-        setDevBypassEnabled(!!data.devBypassEnabled);
-        setStep('rollInput');
-        await initCamera(ac.signal, !!data.devBypassEnabled);
-        await loadCaptcha();
-        // fingerprint
-        try {
-          const fp = await FingerprintJS.load();
-          const result = await fp.get();
-          if (!ac.signal.aborted) fingerRef.current = result.visitorId;
-        } catch { /* ignore */ }
+        const bypass = !!data.devBypassEnabled;
+        setDevBypassEnabled(bypass);
+        devBypassEnabledRef.current = bypass;
+        // Show onboarding screen — camera/captcha/fingerprint deferred to handleAcknowledge
+        setStep('permissions');
       } catch (err) {
         if (!ac.signal.aborted) {
           setErrMsg((err as Error).message);
@@ -114,18 +122,8 @@ export default function StudentScan() {
     };
   }, [shortCode, API, loadCaptcha]);
 
-  useEffect(() => {
-    if (step === 'rollInput') {
-      startConditionalUI();
-    }
-    return () => {
-      if (conditionalUiAbortRef.current) {
-        conditionalUiAbortRef.current.abort();
-      }
-    };
-  }, [step]);
-
-  const initCamera = async (signal?: AbortSignal, bypassFlag?: boolean) => {
+  /** Initialize camera stream. Extracted as useCallback so handleAcknowledge can depend on it. */
+  const initCamera = useCallback(async (signal?: AbortSignal, bypassFlag?: boolean) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       if (signal?.aborted) {
@@ -135,7 +133,7 @@ export default function StudentScan() {
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); }
     } catch (err) {
-      const isBypassed = bypassFlag !== undefined ? bypassFlag : devBypassEnabled;
+      const isBypassed = bypassFlag !== undefined ? bypassFlag : devBypassEnabledRef.current;
       if (isBypassed) {
         flash('Camera error, but DEV bypass is available.', true);
         return;
@@ -149,7 +147,33 @@ export default function StudentScan() {
       setErrMsg(msgs[e.name] ?? `Camera error: ${e.message}`);
       setStep('error');
     }
-  };
+  }, []);
+
+  /** Called when student taps "I Acknowledge & Continue" on the onboarding screen */
+  const handleAcknowledge = useCallback(async () => {
+    setStep('rollInput');
+    // Now trigger camera, captcha, and fingerprint — student is prepared
+    const ac = initAbortRef.current ?? new AbortController();
+    await initCamera(ac.signal, devBypassEnabledRef.current);
+    await loadCaptcha();
+    try {
+      const fp = await FingerprintJS.load();
+      const result = await fp.get();
+      if (!ac.signal.aborted) fingerRef.current = result.visitorId;
+    } catch { /* ignore */ }
+  }, [loadCaptcha, initCamera]);
+
+  useEffect(() => {
+    if (step === 'rollInput') {
+      startConditionalUI();
+    }
+    return () => {
+      if (conditionalUiAbortRef.current) {
+        conditionalUiAbortRef.current.abort();
+      }
+    };
+  }, [step]);
+
 
   // Attach the (pre-acquired) camera stream once the form pane's <video> mounts.
   useEffect(() => {
@@ -498,13 +522,26 @@ export default function StudentScan() {
     </div>
   );
 
-  if (!isMobile && !devBypassEnabled && step !== 'loading' && step !== 'error') {
+  const isPrivacyOs = detectPrivacyOs();
+
+  if (!isMobile && !devBypassEnabled && step !== 'loading' && step !== 'error' && step !== 'permissions') {
     return <MobileDeviceRequired />;
   }
 
   return (
     <>
-    {step !== 'form' && (
+    {/* Floating help button — visible on all steps except loading and success */}
+    <HelpDrawer currentStep={step} />
+
+    {/* ── Permission Onboarding Screen ── */}
+    {step === 'permissions' && session && (
+      <PermissionOnboarding
+        locationName={session.locationName}
+        onAcknowledge={handleAcknowledge}
+        isPrivacyOs={isPrivacyOs}
+      />
+    )}
+    {step !== 'form' && step !== 'permissions' && (
     <div className="attend-page">
       {step === 'loading' && (
         <div className="attend-card"><div className="attend-center"><Spinner /></div></div>

@@ -18,6 +18,21 @@ vi.mock('../../src/hooks/useIsMobile', () => ({
   useIsMobile: vi.fn(),
 }));
 
+// Helper: after session loads, click through the permission onboarding screen
+// so that the roll-number step is visible.
+async function acknowledgeOnboarding() {
+  // Wait for the onboarding screen ("Before You Begin")
+  await waitFor(() =>
+    expect(screen.getByText(/Before You Begin/i)).toBeInTheDocument()
+  );
+  // Click the acknowledge button to advance to rollInput step
+  fireEvent.click(screen.getByRole('button', { name: /I Understand/i }));
+  // Wait for the roll-number input to appear
+  await waitFor(() =>
+    expect(screen.getByText(/Mark Attendance/i)).toBeInTheDocument()
+  );
+}
+
 describe('StudentScan', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -95,21 +110,32 @@ describe('StudentScan', () => {
     </MemoryRouter>
   );
 
-  it('should render loading state initially', async () => {
+  it('should render loading state initially, then show permission onboarding', async () => {
     renderComponent();
+    // Loading spinner shown first
     expect(screen.getByText(/Loading session.../i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText(/Mark Attendance/i)).toBeInTheDocument());
+    // Then the onboarding screen appears
+    await waitFor(() =>
+      expect(screen.getByText(/Before You Begin/i)).toBeInTheDocument()
+    );
+  });
+
+  it('should advance to roll-number input after acknowledging onboarding', async () => {
+    renderComponent();
+    await acknowledgeOnboarding();
+    // Roll number input should now be visible
+    expect(screen.getByPlaceholderText(/e.g. 21CS042/i)).toBeInTheDocument();
   });
 
   it('should transition to form and acquire location', async () => {
     Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true });
     renderComponent();
-    await waitFor(() => expect(screen.getByText(/Mark Attendance/i)).toBeInTheDocument());
+    await acknowledgeOnboarding();
     
     // Step 1: Input roll number
     fireEvent.change(screen.getByPlaceholderText(/e.g. 21CS042/i), { target: { value: '21CS042' } });
     
-    // Step 2: Fallback click
+    // Step 2: Fallback click (WebAuthn not supported)
     fireEvent.click(screen.getByText(/Continue without biometric/i));
 
     await waitFor(() => {
@@ -130,7 +156,7 @@ describe('StudentScan', () => {
 
     Object.defineProperty(window, 'PublicKeyCredential', { value: undefined, configurable: true });
     renderComponent();
-    await waitFor(() => expect(screen.getByText(/Mark Attendance/i)).toBeInTheDocument());
+    await acknowledgeOnboarding();
     
     fireEvent.change(screen.getByPlaceholderText(/e.g. 21CS042/i), { target: { value: '21CS042' } });
     fireEvent.click(screen.getByText(/Continue without biometric/i));
