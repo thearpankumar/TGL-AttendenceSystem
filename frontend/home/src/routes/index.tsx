@@ -459,6 +459,15 @@ function EngineSection() {
     { icon: Eye, label: "Liveness", color: "text-purple" },
     { icon: ShieldCheck, label: "Fraud Detection", color: "text-emerald" },
   ];
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % orbits.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [orbits.length]);
+
   return (
     <Section
       id="platform"
@@ -470,7 +479,8 @@ function EngineSection() {
       }
       subtitle="The Attendix Intelligence Engine fuses eight verification layers into a single decision — in under 800 milliseconds."
     >
-      <div className="relative mx-auto aspect-square w-full max-w-[720px]">
+      {/* Desktop layout: Concentric orbits */}
+      <div className="relative mx-auto aspect-square w-full max-w-[720px] hidden md:block">
         {/* outer rings */}
         {[1, 2, 3].map((r) => (
           <div
@@ -556,6 +566,73 @@ function EngineSection() {
             );
           })}
         </svg>
+      </div>
+
+      {/* Mobile-optimized core & layers */}
+      <div className="block md:hidden w-full max-w-[480px] mx-auto mt-4 px-2">
+        <div className="flex flex-col items-center justify-center mb-6">
+          <motion.div
+            animate={{
+              scale: [1, 1.03, 1],
+              boxShadow: [
+                "0 0 25px rgba(34,211,238,0.15)",
+                "0 0 45px rgba(34,211,238,0.35)",
+                "0 0 25px rgba(34,211,238,0.15)",
+              ],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="relative h-28 w-28 rounded-full glass-strong grid place-items-center overflow-hidden border border-white/10"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan/20 via-electric/15 to-purple/20 blur-lg" />
+            <div className="relative text-center z-10">
+              <div className="text-[9px] uppercase tracking-[0.25em] text-white/50">Attendix</div>
+              <div className="mt-0.5 font-display text-lg font-bold text-gradient-accent">Core</div>
+              <div className="mt-1 text-[8px] text-white/40">v4.2 · 812ms</div>
+            </div>
+          </motion.div>
+          <div className="h-6 w-px bg-gradient-to-b from-white/20 to-white/5" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 w-full">
+          {orbits.map((o, idx) => {
+            const isActive = idx === activeIndex;
+            const Icon = o.icon;
+            return (
+              <motion.div
+                key={o.label}
+                onClick={() => setActiveIndex(idx)}
+                whileTap={{ scale: 0.97 }}
+                className={`relative rounded-xl p-3 border transition-all duration-300 cursor-pointer overflow-hidden ${
+                  isActive
+                    ? "bg-white/[0.08] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                    : "bg-white/[0.02] border-white/5 opacity-60"
+                }`}
+              >
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan/5 via-electric/5 to-purple/5 opacity-40 pointer-events-none" />
+                )}
+                <div className="relative flex flex-col items-center text-center">
+                  <div
+                    className={`p-2 rounded-lg transition-all duration-300 ${isActive ? "bg-white/10" : "bg-white/[0.02]"}`}
+                  >
+                    <Icon className={`h-5 w-5 ${isActive ? o.color : "text-white/40"}`} />
+                  </div>
+                  <div
+                    className={`mt-2 font-display text-xs tracking-tight ${isActive ? "text-white font-medium" : "text-white/50"}`}
+                  >
+                    {o.label}
+                  </div>
+                  {isActive && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[8px] font-medium text-emerald uppercase tracking-wider">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" />
+                      <span>Running</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     </Section>
   );
@@ -676,10 +753,10 @@ function DashboardShowcase() {
         className="relative rounded-3xl glass-strong overflow-hidden noise"
       >
         <div className="absolute inset-0 bg-gradient-to-br from-cyan/5 via-transparent to-purple/5 pointer-events-none" />
-        <div className="grid grid-cols-[220px,1fr]">
+        <div className="grid grid-cols-1 md:grid-cols-[220px,1fr]">
           {/* sidebar */}
-          <aside className="border-r border-white/10 p-4 space-y-1">
-            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-3 px-2">
+          <aside className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-white/10 p-3 md:p-4 gap-1.5 md:space-y-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="hidden md:block text-[10px] uppercase tracking-widest text-white/40 mb-3 px-2">
               Workspace
             </div>
             {(
@@ -695,29 +772,29 @@ function DashboardShowcase() {
             ).map(([label, Icon, active]) => (
               <div
                 key={label}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${active ? "bg-white/10 text-white" : "text-white/50 hover:text-white/80"}`}
+                className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm shrink-0 ${active ? "bg-white/10 text-white" : "text-white/50 hover:text-white/80"}`}
               >
                 <Icon className="h-3.5 w-3.5" /> {label}
               </div>
             ))}
           </aside>
           {/* main */}
-          <div className="p-5">
-            <div className="flex items-center justify-between">
+          <div className="p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="text-[11px] uppercase tracking-widest text-white/40">
                   Today · Global
                 </div>
-                <div className="font-display text-2xl">Live attendance</div>
+                <div className="font-display text-xl sm:text-2xl">Live attendance</div>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs self-start sm:self-auto">
                 <span className="rounded-full glass px-2.5 py-1 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" /> streaming
                 </span>
                 <span className="rounded-full glass px-2.5 py-1">Last 24h</span>
               </div>
             </div>
-            <div className="mt-5 grid grid-cols-4 gap-3">
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { k: "Verified", v: "12,483", d: "+4.2%", c: "text-emerald" },
                 { k: "In progress", v: "127", d: "live", c: "text-cyan" },
@@ -725,14 +802,16 @@ function DashboardShowcase() {
                 { k: "Sites", v: "218", d: "online", c: "text-purple" },
               ].map((s) => (
                 <div key={s.k} className="rounded-xl glass p-3">
-                  <div className="text-[10px] uppercase tracking-widest text-white/40">{s.k}</div>
-                  <div className="mt-1 font-display text-2xl tabular-nums">{s.v}</div>
+                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider sm:tracking-widest text-white/40">
+                    {s.k}
+                  </div>
+                  <div className="mt-1 font-display text-xl sm:text-2xl tabular-nums">{s.v}</div>
                   <div className={`text-[11px] ${s.c}`}>{s.d}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="col-span-2 rounded-xl glass p-4 h-52 relative overflow-hidden">
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="col-span-1 lg:col-span-2 rounded-xl glass p-4 h-52 relative overflow-hidden">
                 <div className="text-[11px] uppercase tracking-widest text-white/40">
                   Verification volume
                 </div>
@@ -758,7 +837,7 @@ function DashboardShowcase() {
                   />
                 </svg>
               </div>
-              <div className="rounded-xl glass p-4 h-52">
+              <div className="rounded-xl glass p-4 h-52 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="text-[11px] uppercase tracking-widest text-white/40">
                   Face match log
                 </div>
@@ -772,10 +851,12 @@ function DashboardShowcase() {
                   ].map((n, i) => (
                     <div key={i} className="flex items-center justify-between text-[11px]">
                       <span className="flex items-center gap-2 text-white/80">
-                        <span className="h-5 w-5 rounded-full bg-gradient-to-br from-cyan to-purple" />
-                        {n.split(" · ")[0]}
+                        <span className="h-5 w-5 rounded-full bg-gradient-to-br from-cyan to-purple shrink-0" />
+                        <span className="truncate">{n.split(" · ")[0]}</span>
                       </span>
-                      <span className="text-emerald tabular-nums">{n.split(" · ")[1]}</span>
+                      <span className="text-emerald tabular-nums shrink-0">
+                        {n.split(" · ")[1]}
+                      </span>
                     </div>
                   ))}
                 </div>

@@ -1,7 +1,7 @@
-.PHONY: all backend student admin
+.PHONY: all backend student admin home
 
-# Run all checks across backend, student frontend, and admin frontend
-all: backend student admin
+# Run all checks across backend, student frontend, admin frontend, and home frontend
+all: backend student admin home
 
 backend:
 	@echo "==============================="
@@ -27,3 +27,11 @@ admin:
 	cd frontend/admin && npm run typecheck
 	cd frontend/admin && npm run test
 	cd frontend/admin && npm run build
+
+home:
+	@echo "==============================="
+	@echo "  Running Home Frontend Checks "
+	@echo "==============================="
+	cd frontend/home && bun run lint
+	cd frontend/home && bun run typecheck
+	cd frontend/home && bun run build

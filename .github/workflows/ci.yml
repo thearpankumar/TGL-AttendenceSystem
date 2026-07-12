@@ -126,6 +126,34 @@ jobs:
           path: frontend/student/coverage/
           retention-days: 7
 
+  frontend-home-test:
+    name: Frontend Home Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/home
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run linting
+        run: bun run lint
+
+      - name: Run typecheck
+        run: bun run typecheck
+
+      - name: Run build
+        run: bun run build
+
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -146,17 +174,36 @@ jobs:
           npm audit --audit-level=high
         continue-on-error: false
 
-      - name: Audit frontend dependencies
+      - name: Audit frontend/admin dependencies
         run: |
           cd frontend/admin
-          echo "=== Frontend Security Audit ==="
+          echo "=== Frontend Admin Security Audit ==="
           npm audit --audit-level=high
+        continue-on-error: false
+
+      - name: Audit frontend/student dependencies
+        run: |
+          cd frontend/student
+          echo "=== Frontend Student Security Audit ==="
+          npm audit --audit-level=high
+        continue-on-error: false
+
+      - name: Setup Bun for home audit
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Audit frontend/home dependencies
+        run: |
+          cd frontend/home
+          echo "=== Frontend Home Security Audit ==="
+          bun audit --audit-level=high
         continue-on-error: false
 
   ci-status:
     name: CI Status Check
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-admin-test, frontend-student-test, security-audit]
+    needs: [backend-test, frontend-admin-test, frontend-student-test, frontend-home-test, security-audit]
     if: always()
 
     steps:
@@ -165,6 +212,7 @@ jobs:
           if [ "${{ needs.backend-test.result }}" != "success" ] || \
              [ "${{ needs.frontend-admin-test.result }}" != "success" ] || \
              [ "${{ needs.frontend-student-test.result }}" != "success" ] || \
+             [ "${{ needs.frontend-home-test.result }}" != "success" ] || \
              [ "${{ needs.security-audit.result }}" != "success" ]; then
             echo "::error::One or more CI jobs failed"
             exit 1
