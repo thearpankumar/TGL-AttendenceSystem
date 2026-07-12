@@ -16,24 +16,30 @@ const handleValidationErrors = (req, res, next) => {
 
 const validateAdmin = [
   body('username')
+    .isString().withMessage('Username must be a string')
     .trim()
     .isLength({ min: 3, max: 30 })
     .withMessage('Username must be 3-30 characters')
     .isAlphanumeric()
     .withMessage('Username must be alphanumeric'),
   body('email')
+    .isString().withMessage('Email must be a string')
     .isEmail()
     .normalizeEmail()
     .withMessage('Valid email required'),
   body('password')
+    .isString().withMessage('Password must be a string')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters'),
   handleValidationErrors,
 ];
 
 const validateLogin = [
-  body('username').trim().notEmpty().withMessage('Username required'),
-  body('password').notEmpty().withMessage('Password required'),
+  // Reject non-string username/password before they ever reach a Mongo
+  // query or bcrypt.compare — otherwise an object payload like
+  // {"username": {"$ne": null}} would be handed to Admin.findOne() as-is.
+  body('username').isString().withMessage('Username must be a string').trim().notEmpty().withMessage('Username required'),
+  body('password').isString().withMessage('Password must be a string').notEmpty().withMessage('Password required'),
   handleValidationErrors,
 ];
 

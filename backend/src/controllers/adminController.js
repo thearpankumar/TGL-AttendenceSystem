@@ -7,6 +7,9 @@ const Flag = require('../models/Flag');
 const { generateToken } = require('../middleware/auth');
 const config = require('../config');
 
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOCK_DURATION_MS = 15 * 60 * 1000;
+
 const createAdmin = async (req, res) => {
   try {
     const { username, email, password, adminSecret } = req.body;
@@ -55,10 +58,50 @@ const loginAdmin = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    if (admin.lockUntil && admin.lockUntil > Date.now()) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
     const isMatch = await admin.matchPassword(password);
 
     if (!isMatch) {
+      // Pipeline update so the increment (and the lock it may trigger) is
+      // computed atomically from the document's current state, race-free
+      // under concurrent login attempts. Resets to 1 instead of continuing
+      // a stale count if the previous lock has already expired.
+      const now = new Date();
+      await Admin.findOneAndUpdate(
+        { _id: admin._id },
+        [
+          {
+            $set: {
+              failedLoginAttempts: {
+                $cond: [
+                  { $and: [{ $ne: ['$lockUntil', null] }, { $lte: ['$lockUntil', now] }] },
+                  1,
+                  { $add: ['$failedLoginAttempts', 1] },
+                ],
+              },
+            },
+          },
+          {
+            $set: {
+              lockUntil: {
+                $cond: [
+                  { $gte: ['$failedLoginAttempts', MAX_FAILED_LOGIN_ATTEMPTS] },
+                  new Date(now.getTime() + LOCK_DURATION_MS),
+                  null,
+                ],
+              },
+            },
+          },
+        ]
+      );
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    if (admin.failedLoginAttempts > 0 || admin.lockUntil) {
+      await Admin.updateOne({ _id: admin._id }, { failedLoginAttempts: 0, lockUntil: null });
     }
 
     const token = generateToken(admin._id);

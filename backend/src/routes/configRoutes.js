@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { adminLimiter } = require('../middleware/rateLimiter');
 const SystemConfig = require('../models/SystemConfig');
 const Admin = require('../models/Admin');
+
+router.use(adminLimiter);
 
 // @route   GET /api/config
 // @desc    Get system configuration
