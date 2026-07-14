@@ -1,4 +1,5 @@
 const DeviceFingerprint = require('../models/DeviceFingerprint');
+const logger = require('../utils/logger').child({ module: 'deviceFingerprint' });
 
 async function checkDeviceFingerprint(req, res, next) {
   if (process.env.NODE_ENV === 'test') {
@@ -29,7 +30,7 @@ async function checkDeviceFingerprint(req, res, next) {
     
     next();
   } catch (error) {
-    console.error('Device fingerprint check error:', error);
+    logger.error({ err: error }, 'Device fingerprint check error');
     next();
   }
 }
@@ -48,7 +49,7 @@ async function recordDeviceSuccess(req, res, next) {
     await device.addUserAgent(req.headers['user-agent'] || 'unknown');
     await device.addClaimedDeviceType(req.body.devBypassWebauthn ? 'dev-bypass' : 'normal');
   } catch (error) {
-    console.error('Record device success error:', error);
+    logger.error({ err: error }, 'Record device success error');
   }
   
   next();
@@ -61,7 +62,7 @@ async function recordDeviceFailure(fingerprintId, reason) {
     const device = await DeviceFingerprint.findOrCreate(fingerprintId);
     await device.recordVerificationFailure(reason);
   } catch (error) {
-    console.error('Record device failure error:', error);
+    logger.error({ err: error }, 'Record device failure error');
   }
 }
 
@@ -86,7 +87,7 @@ async function getDeviceTrustScore(fingerprintId) {
     const trustScore = Math.max(0, Math.min(100, baseScore + successBonus - failPenalty - spoofingPenalty));
     return trustScore;
   } catch (error) {
-    console.error('Get device trust score error:', error);
+    logger.error({ err: error }, 'Get device trust score error');
     return 50;
   }
 }
@@ -100,7 +101,7 @@ async function flagSuspiciousDevice(fingerprintId, inconsistencies) {
     device.inconsistencies = [...new Set([...device.inconsistencies, ...inconsistencies])];
     await device.recordVerificationFailure('Spoofing detected: ' + inconsistencies.join(', '));
   } catch (error) {
-    console.error('Flag suspicious device error:', error);
+    logger.error({ err: error }, 'Flag suspicious device error');
   }
 }
 

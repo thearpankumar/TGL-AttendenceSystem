@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const { adminLimiter } = require('../middleware/rateLimiter');
 const SystemConfig = require('../models/SystemConfig');
 const Admin = require('../models/Admin');
+const logger = require('../utils/logger').child({ module: 'configRoutes' });
 
 router.use(adminLimiter);
 
@@ -18,7 +19,7 @@ router.get('/', protect, async (req, res) => {
     }
     res.json(config);
   } catch (error) {
-    console.error('Config fetch error:', error);
+    logger.error({ err: error, requestId: req.id }, 'Config fetch error');
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -59,7 +60,7 @@ router.post('/dev-bypass', protect, async (req, res) => {
 
     res.json({ message: 'Developer Bypass Mode updated successfully', config });
   } catch (error) {
-    console.error('Config update error:', error);
+    logger.error({ err: error, requestId: req.id }, 'Config update error');
     res.status(500).json({ message: 'Server error' });
   }
 });

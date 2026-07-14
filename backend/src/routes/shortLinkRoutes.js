@@ -16,6 +16,7 @@ const svgCaptcha = require('svg-captcha');
 const crypto = require('crypto');
 const config = require('../config');
 const ipaddr = require('ipaddr.js');
+const logger = require('../utils/logger').child({ module: 'shortLinks' });
 
 const signCaptchaText = (text, timestamp) => {
   return crypto
@@ -280,7 +281,7 @@ router.post('/:shortCode/submit', studentLimiter, requireMobileDevice, async (re
         photoUrl = uploadResult.url;
         photoPublicId = uploadResult.publicId;
       } catch (uploadError) {
-        if (process.env.NODE_ENV !== 'test') console.error('Photo upload error details:', uploadError);
+        logger.error({ err: uploadError, requestId: req.id }, 'Photo upload error');
         return res.status(400).json({
           message: 'Failed to upload photo',
           error: uploadError.message,
@@ -349,7 +350,7 @@ router.post('/:shortCode/submit', studentLimiter, requireMobileDevice, async (re
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch ISP information:', err.message);
+        logger.warn({ err, ip, requestId: req.id }, 'Failed to fetch ISP information');
       }
     }
 
@@ -399,7 +400,7 @@ router.post('/:shortCode/submit', studentLimiter, requireMobileDevice, async (re
         message: 'Attendance already submitted for this roll number',
       });
     }
-    if (process.env.NODE_ENV !== 'test') console.error('Submit attendance error:', error);
+    logger.error({ err: error, requestId: req.id }, 'Submit attendance error');
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -582,7 +583,7 @@ router.get('/:shortCode', studentLimiter, requireMobileDevice, async (req, res) 
 
     res.redirect(studentAppUrl);
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('Short link redirect error:', error);
+    logger.error({ err: error, requestId: req.id, shortCode: req.params.shortCode }, 'Short link redirect error');
     res.status(500).send(`
       <!DOCTYPE html>
       <html>

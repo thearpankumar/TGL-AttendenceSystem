@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const config = require('../config');
 const { detectFace, checkPhotoReuse } = require('../services/faceDetection');
 const { computePerceptualHash, validateImage, sanitizeImage } = require('../utils/photoHash');
+const logger = require('../utils/logger').child({ module: 'webauthn' });
 const {
   generateChallenge,
   createRegistrationOptions,
@@ -213,7 +214,7 @@ router.post('/:shortCode/webauthn/register/finish', registrationLimiter, require
       message: 'Device enrolled successfully',
     });
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('WebAuthn /register/finish error:', error);
+    logger.error({ err: error, requestId: req.id }, 'WebAuthn register/finish error');
     const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
     res.status(500).json({ message: 'Server error', error: errorMessage });
   }
@@ -565,7 +566,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
               confidence: faceConfidence,
             });
           } catch (hashError) {
-            console.warn('Photo hashing failed:', hashError.message);
+            logger.warn({ err: hashError, requestId: req.id, studentId }, 'Photo hashing failed (non-fatal)');
           }
         } else {
           faceDetected = true;
@@ -631,7 +632,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch ISP information:', err.message);
+        logger.warn({ err, ip, requestId: req.id }, 'Failed to fetch ISP information');
       }
     }
     
@@ -751,7 +752,7 @@ router.post('/:shortCode/webauthn/authenticate/finish', studentLimiter, requireM
       replayAttack,
     });
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('WebAuthn /authenticate/finish error:', error);
+    logger.error({ err: error, requestId: req.id }, 'WebAuthn authenticate/finish error');
     const errorMessage = config.nodeEnv === 'production' ? undefined : error.message;
     res.status(500).json({ message: 'Server error', error: errorMessage });
   }

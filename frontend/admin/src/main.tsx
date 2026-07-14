@@ -4,6 +4,7 @@ import App from './App';
 import './index.css';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Short-link / student paths belong to the Caddy front door, not the admin's
 // dev port (:3000). If one lands here, bounce to the same path without the port
@@ -17,8 +18,10 @@ import { AuthProvider } from './context/AuthContext';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <ErrorBoundary appName="AdminFrontend">
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

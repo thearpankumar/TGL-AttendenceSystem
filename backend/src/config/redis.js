@@ -1,11 +1,12 @@
 const Redis = require('ioredis');
 const config = require('./index');
+const logger = require('../utils/logger').child({ module: 'redis' });
 
 let redisClient = null;
 
 function initializeRedis() {
   if (!config.redis?.url) {
-    console.warn('Redis URL not configured - caching disabled');
+    logger.warn('Redis URL not configured — caching disabled');
     return null;
   }
 
@@ -25,28 +26,28 @@ function initializeRedis() {
     });
 
     redisClient.on('connect', () => {
-      console.log('✓ Redis: Connected');
+      logger.info('Redis: Connected');
     });
 
     redisClient.on('ready', () => {
-      console.log('✓ Redis: Ready to accept commands');
+      logger.info('Redis: Ready to accept commands');
     });
 
     redisClient.on('error', (err) => {
-      console.error('✗ Redis error:', err.message);
+      logger.error({ err }, 'Redis error');
     });
 
     redisClient.on('close', () => {
-      console.warn('⚠ Redis: Connection closed');
+      logger.warn('Redis: Connection closed');
     });
 
     redisClient.on('reconnecting', () => {
-      console.log('↻ Redis: Reconnecting...');
+      logger.info('Redis: Reconnecting...');
     });
 
     return redisClient;
   } catch (error) {
-    console.error('✗ Redis initialization failed:', error.message);
+    logger.error({ err: error }, 'Redis initialization failed');
     return null;
   }
 }
@@ -66,7 +67,7 @@ async function closeRedis() {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
-    console.log('✓ Redis: Connection closed gracefully');
+    logger.info('Redis: Connection closed gracefully');
   }
 }
 

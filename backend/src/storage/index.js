@@ -1,6 +1,7 @@
 const StorageProvider = require('./StorageProvider');
 const CloudinaryProvider = require('./CloudinaryProvider');
 const S3Provider = require('./S3Provider');
+const logger = require('../utils/logger').child({ module: 'storage' });
 
 let storageProvider = null;
 
@@ -15,7 +16,7 @@ function initializeStorage(config) {
       }
       storageProvider = new S3Provider(config.s3);
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`Storage initialized: AWS S3 (${config.s3.bucket})`);
+        logger.info(`Storage initialized: AWS S3 (${config.s3.bucket})`);
       }
       break;
 
@@ -26,7 +27,7 @@ function initializeStorage(config) {
       }
       storageProvider = new CloudinaryProvider(config.cloudinary);
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`Storage initialized: Cloudinary (${config.cloudinary.cloudName})`);
+        logger.info(`Storage initialized: Cloudinary (${config.cloudinary.cloudName})`);
       }
       break;
   }

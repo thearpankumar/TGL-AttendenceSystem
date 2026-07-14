@@ -1,13 +1,25 @@
-// Discovers every container on the host via the Docker socket and ships
-// their stdout/stderr to Loki — this already works today (Caddy's JSON
-// access logs, Mongo/Redis logs, backend console output, etc). Any logging
-// you add to the app later flows through automatically, no config change
-// needed here.
+// Grafana Alloy log pipeline for Attendix.
+//
+// Pipeline:
+//   Docker socket discovery
+//     → relabel (container name as label)
+//     → loki.source.docker (tails container stdout/stderr)
+//     → loki.process (JSON parse → extract level + module as labels)
+//     → loki.write (Loki)
+//
+// JSON logs (Pino format) get level and module promoted to Loki labels so you
+// can filter efficiently:
+//   {container="attendance-backend", level="error"}
+//   {container="attendance-backend"} | json | module="attendance"
+//
+// Non-JSON lines (MongoDB/Redis plain text) pass through unchanged as raw strings.
 
+// ─── 1. Discover all Docker containers ─────────────────────────────────────
 discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
 }
 
+// ─── 2. Relabel: extract clean container name ───────────────────────────────
 discovery.relabel "containers" {
   targets = discovery.docker.containers.targets
 
@@ -18,13 +30,66 @@ discovery.relabel "containers" {
   }
 }
 
+// ─── 3. Source: tail container logs ────────────────────────────────────────
 loki.source.docker "default" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.containers.output
-  labels     = {"job" = "docker"}
+  labels     = { "job" = "docker" }
+  forward_to = [loki.process.json_pipeline.receiver]
+}
+
+// ─── 4. Process: parse JSON + extract labels ───────────────────────────────
+loki.process "json_pipeline" {
+  // Stage 1: Attempt to parse the log line as JSON (Pino output).
+  // If the line is not JSON (e.g. MongoDB/Redis plain text), this stage
+  // is a no-op and the line passes through unchanged.
+  stage.json {
+    expressions = {
+      // Extract these fields from the JSON body for use in later stages.
+      // They do NOT become labels here — just extracted values.
+      extracted_level  = "level",
+      extracted_module = "module",
+      extracted_msg    = "message",
+    }
+  }
+
+  // Stage 2: Translate Pino's integer log levels to strings.
+  // Pino uses: 30=info, 40=warn, 50=error, 60=fatal
+  stage.replace {
+    expression = "^30$"
+    source = "extracted_level"
+    replace = "info"
+  }
+  stage.replace {
+    expression = "^40$"
+    source = "extracted_level"
+    replace = "warn"
+  }
+  stage.replace {
+    expression = "^50$"
+    source = "extracted_level"
+    replace = "error"
+  }
+  stage.replace {
+    expression = "^60$"
+    source = "extracted_level"
+    replace = "fatal"
+  }
+
+  // Stage 3: Promote extracted fields to Loki stream labels.
+  // Keep label cardinality LOW — only high-value, low-cardinality fields.
+  // requestId, rollNumber, sessionId should stay in the log body (query with `| json`).
+  stage.labels {
+    values = {
+      level  = "extracted_level",
+      module = "extracted_module",
+    }
+  }
+
   forward_to = [loki.write.default.receiver]
 }
 
+// ─── 5. Write to Loki ──────────────────────────────────────────────────────
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"

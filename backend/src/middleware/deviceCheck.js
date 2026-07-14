@@ -1,5 +1,6 @@
 const Device = require('../models/Device');
 const Attendance = require('../models/Attendance');
+const logger = require('../utils/logger').child({ module: 'deviceCheck' });
 
 async function validateDeviceFingerprint(req, res, next) {
   try {
@@ -38,6 +39,10 @@ async function validateDeviceFingerprint(req, res, next) {
         );
         req.deviceValidation.flags.push('MULTI_STUDENT_DEVICE');
         req.deviceValidation.deviceFlag = 'MULTI_STUDENT_DEVICE';
+        logger.warn(
+          { requestId: req.id, rollNumber, sessionId, flag: 'MULTI_STUDENT_DEVICE' },
+          'Device previously used by a different student'
+        );
       }
       
       await existingDevice.save();
@@ -52,6 +57,10 @@ async function validateDeviceFingerprint(req, res, next) {
         req.deviceValidation.flags.push('STUDENT_DEVICE_SWITCHED');
         req.deviceValidation.deviceFlag = 'STUDENT_DEVICE_SWITCHED';
         req.deviceValidation.previousDevice = studentExistingDevice;
+        logger.warn(
+          { requestId: req.id, rollNumber, sessionId, flag: 'STUDENT_DEVICE_SWITCHED' },
+          'Student submitted from a different device than previously seen'
+        );
       }
 
       const newDevice = new Device({
@@ -79,7 +88,7 @@ async function validateDeviceFingerprint(req, res, next) {
 
     next();
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('Device validation error:', error);
+    logger.error({ err: error, requestId: req.id }, 'Device validation error — allowing submission');
     req.deviceValidation = {
       valid: true,
       warning: 'Device validation failed, allowing submission',
@@ -104,11 +113,15 @@ async function checkRapidSubmission(req, res, next) {
       req.deviceValidation.flags.push('RAPID_SUBMISSION');
       req.deviceValidation.deviceFlag = 'RAPID_SUBMISSION';
       req.deviceValidation.rapidSubmissionWarning = 'Attendance already submitted within last 10 seconds';
+      logger.warn(
+        { requestId: req.id, rollNumber, sessionId, flag: 'RAPID_SUBMISSION' },
+        'Rapid resubmission detected within 10-second window'
+      );
     }
 
     next();
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('Rapid submission check error:', error);
+    logger.error({ err: error, requestId: req.id }, 'Rapid submission check error');
     next();
   }
 }

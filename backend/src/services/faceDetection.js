@@ -1,4 +1,4 @@
-
+const logger = require('../utils/logger').child({ module: 'faceDetection' });
 
 let faceDetectionLib = null;
 let initialized = false;
@@ -8,14 +8,14 @@ async function initializeFaceDetection() {
     faceDetectionLib = require('face-api.js');
     
     if (!process.env.FACE_DETECTION_DISABLED) {
-      console.log('Face detection initialized in mock mode');
+      logger.info('Face detection initialized in mock mode');
     }
     
     initialized = true;
     return true;
   } catch (_error) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('Face detection library not available, using mock detection');
+      logger.warn('Face detection library not available, using mock detection');
     }
     initialized = true;
     return true;

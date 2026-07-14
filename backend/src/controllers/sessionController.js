@@ -9,6 +9,7 @@ const { getStorageProvider } = require('../storage');
 const { generateTOTPWithTimestamp, generateQRToken } = require('../utils/totpUtils');
 const { invalidateSessionCache } = require('../middleware/sessionCache');
 const ExcelJS = require('exceljs');
+const logger = require('../utils/logger').child({ module: 'session' });
 
 const createSession = async (req, res) => {
   try {
@@ -336,7 +337,7 @@ const deleteSession = async (req, res) => {
           attendanceWithPhotos.map((record) => storage.delete(record.photoPublicId))
         );
       } catch (storageError) {
-        if (process.env.NODE_ENV !== 'test') console.error('Storage cleanup error (non-fatal):', storageError.message);
+        logger.error({ err: storageError, sessionId: session._id }, 'Storage cleanup error (non-fatal)');
       }
     }
 

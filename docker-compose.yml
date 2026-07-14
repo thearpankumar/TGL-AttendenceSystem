@@ -113,15 +113,6 @@ services:
       - MONGODB_POOL_MAX=${MONGODB_POOL_MAX:-300}
       - MONGODB_POOL_MIN=${MONGODB_POOL_MIN:-20}
       - DEV_BYPASS_ALL=${DEV_BYPASS_ALL:-false}
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          cpus: '1.5'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s

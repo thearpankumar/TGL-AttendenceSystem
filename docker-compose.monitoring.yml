@@ -27,7 +27,7 @@ services:
   # Internal-only: no host port, no Caddy route. Stays on web-net only to
   # scrape caddy:2019/metrics — not to be reached from it.
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:v3.12.0
     container_name: attendance-prometheus
     restart: unless-stopped
     volumes:
@@ -46,7 +46,7 @@ services:
   # are limited/best-effort — it runs inside the Desktop VM, not directly on
   # the host. Fully accurate on a real Linux Docker host.
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: ghcr.io/google/cadvisor:v0.60.5
     container_name: attendance-cadvisor
     restart: unless-stopped
     privileged: true
@@ -64,7 +64,7 @@ services:
   # ponytail: same Docker Desktop caveat as cAdvisor — reports the Desktop
   # VM's host stats, not literally your Mac's, on non-Linux dev machines.
   node-exporter:
-    image: prom/node-exporter:v1.8.2
+    image: prom/node-exporter:v1.12.0
     container_name: attendance-node-exporter
     restart: unless-stopped
     pid: host
@@ -83,10 +83,19 @@ services:
       - monitoring-net
 
   loki:
-    image: grafana/loki:3.3.2
+    image: grafana/loki:3.7.0
     container_name: attendance-loki
     restart: unless-stopped
-    command: -config.file=/etc/loki/loki-config.yml
+    command:
+      - -config.file=/etc/loki/loki-config.yml
+      - -config.expand-env=true
+    environment:
+      # AWS credentials for S3 backend storage. Loki's AWS SDK reads these
+      # standard env vars automatically — no credentials in the config file.
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
@@ -96,7 +105,7 @@ services:
       - monitoring-net
 
   alloy:
-    image: grafana/alloy:v1.5.1
+    image: grafana/alloy:v1.17.0
     container_name: attendance-alloy
     restart: unless-stopped
     command:
@@ -114,7 +123,7 @@ services:
       - monitoring-net
 
   grafana:
-    image: grafana/grafana:11.4.0
+    image: grafana/grafana:13.1.0
     container_name: attendance-grafana
     restart: unless-stopped
     # Reached only through Caddy at /logging-grafana-main — no host port
@@ -130,6 +139,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     expose:
       - "3000"
     depends_on:

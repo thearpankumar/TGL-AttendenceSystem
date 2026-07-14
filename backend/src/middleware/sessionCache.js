@@ -1,5 +1,6 @@
 const Session = require('../models/Session');
 const { isRedisConnected, getRedisClient } = require('../config/redis');
+const logger = require('../utils/logger').child({ module: 'sessionCache' });
 
 const SESSION_CACHE_PREFIX = 'session:';
 const CACHE_TTL = 300;
@@ -45,7 +46,7 @@ async function getCachedSession(tokenHash) {
     
     return session;
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('Redis cache error:', error.message);
+    logger.error({ err: error }, 'Redis cache read error — falling back to DB');
     
     return await Session.findOne({
       tokenHash,
@@ -65,9 +66,9 @@ async function invalidateSessionCache(tokenHash) {
   
   try {
     await redis.del(cacheKey);
-    console.log(`Cache invalidated for token: ${tokenHash.substring(0, 8)}...`);
+    logger.debug({ tokenHashPrefix: tokenHash.substring(0, 8) }, 'Session cache invalidated');
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') console.error('Redis cache invalidation error:', error.message);
+    logger.error({ err: error }, 'Redis cache invalidation error');
   }
 }
 

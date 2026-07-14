@@ -15,26 +15,54 @@ schema_config:
   configs:
     - from: 2024-01-01
       store: tsdb
-      object_store: filesystem
+      object_store: s3
       schema: v13
       index:
         prefix: index_
         period: 24h
 
 storage_config:
-  filesystem:
-    directory: /loki/chunks
+  # object_prefix namespaces all Loki data under loki/ inside the shared bucket,
+  # keeping it completely separate from attendance-photos/ written by the backend.
+  object_prefix: loki
+  aws:
+    # Loki reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION
+    # from the environment variables injected by docker-compose.monitoring.yml —
+    # no credentials are hardcoded here.
+    region: ${AWS_DEFAULT_REGION}
+    bucketnames: ${AWS_S3_BUCKET}
+    s3forcepathstyle: false
   tsdb_shipper:
+    # Local directory used as write-ahead buffer before chunks are shipped to S3.
+    # Must be a writable path inside the container — the loki_data volume covers this.
     active_index_directory: /loki/index
     cache_location: /loki/index_cache
 
 compactor:
   working_directory: /loki/compactor
+  delete_request_store: s3
   compaction_interval: 10m
   retention_enabled: true
   retention_delete_delay: 2h
-  delete_request_store: filesystem
 
 limits_config:
-  # ponytail: fixed 7-day retention, bump if you need a longer log window.
+  # 7-day log retention — bump in production if you need longer history.
   retention_period: 168h
+
+  # Ingestion rate limits — prevent log storms from overloading Loki.
+  # 32 MB/s per tenant (single-tenant self-hosted: this is a safety ceiling).
+  ingestion_rate_mb: 32
+  ingestion_burst_size_mb: 64
+
+  # Per-stream rate limit (each unique label combination = one stream).
+  # 16 MB/s per stream is generous for a single container.
+  per_stream_rate_limit: 16MB
+  per_stream_rate_limit_burst: 32MB
+
+  # Query performance limits.
+  max_query_series: 1000
+  max_entries_limit_per_query: 5000
+
+  # Allow out-of-order ingestion up to 1 minute — handles minor clock skew
+  # between Docker daemon timestamps and Alloy delivery.
+  max_cache_freshness_per_query: 10m

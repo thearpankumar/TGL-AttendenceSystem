@@ -24,12 +24,17 @@ scrape_configs:
     static_configs:
       - targets: ['caddy:2019']
 
-  # Uncomment once the backend exposes /metrics (e.g. via prom-client) —
-  # intentionally not added yet, no app code has been changed for this.
-  # - job_name: backend
-  #   static_configs:
-  #     - targets: ['backend:5000']
-  #   # Note: backend runs as a replicated service (deploy.replicas: 3 in
-  #   # prod) — a static_configs target only ever hits whichever replica
-  #   # Docker's round-robin DNS resolves first. Switch to dns_sd_configs
-  #   # (type: A, port: 5000) if you need all replicas scraped individually.
+  # Backend Node.js metrics via prom-client (/metrics endpoint added in server.js).
+  # Uses dns_sd_configs so ALL 3 replicas (deploy.replicas: 3) are scraped
+  # individually rather than only whichever replica Docker's round-robin DNS
+  # resolves first from a static_configs target.
+  - job_name: backend
+    dns_sd_configs:
+      - names: ['backend']
+        type: A
+        port: 5000
+    metrics_path: /metrics
+    relabel_configs:
+      # Tag each replica's metrics with its resolved IP address.
+      - source_labels: [__address__]
+        target_label: instance

@@ -76,14 +76,30 @@ function createRegistrationLimiter({ skip = isTest } = {}) {
   });
 }
 
+function createClientLogLimiter({ skip = isTest } = {}) {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: buildStore('rl:clientlog:'),
+    skip,
+    message: {
+      message: 'Too many error logs submitted, please slow down',
+    },
+  });
+}
+
 module.exports = {
   adminLimiter: createAdminLimiter(),
   studentLimiter: createStudentLimiter(),
   loginLimiter: createLoginLimiter(),
   registrationLimiter: createRegistrationLimiter(),
+  clientLogLimiter: createClientLogLimiter(),
   createAdminLimiter,
   createStudentLimiter,
   createLoginLimiter,
   createRegistrationLimiter,
+  createClientLogLimiter,
   buildStore,
 };

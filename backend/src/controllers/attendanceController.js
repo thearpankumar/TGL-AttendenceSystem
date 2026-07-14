@@ -9,6 +9,7 @@ const { getCachedSession } = require('../middleware/sessionCache');
 const svgCaptcha = require('svg-captcha');
 const crypto = require('crypto');
 const config = require('../config');
+const logger = require('../utils/logger').child({ module: 'attendance' });
 
 const signCaptchaText = (text, timestamp) => {
   return crypto
@@ -216,7 +217,7 @@ const submitAttendance = async (req, res) => {
         photoUrl = uploadResult.url;
         photoPublicId = uploadResult.publicId;
       } catch (uploadError) {
-        if (process.env.NODE_ENV !== 'test') console.error('Photo upload error details:', uploadError);
+        logger.error({ err: uploadError, requestId: req.id, sessionId: session._id }, 'Photo upload error');
         return res.status(400).json({
           message: 'Failed to upload photo',
           error: uploadError.message,
@@ -265,7 +266,7 @@ const submitAttendance = async (req, res) => {
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch ISP information:', err.message);
+        logger.warn({ err, ip, requestId: req.id }, 'Failed to fetch ISP information');
       }
     }
 
@@ -310,8 +311,13 @@ const submitAttendance = async (req, res) => {
         await device.addClaimedDeviceType('dev-bypass');
       }
     } catch (deviceError) {
-      console.warn('Failed to record device success:', deviceError.message);
+      logger.warn({ err: deviceError, requestId: req.id }, 'Failed to record device success (non-fatal)');
     }
+
+    logger.info(
+      { requestId: req.id, rollNumber, sessionId: session._id, verified: isWithinGeofence, distance: Math.round(distance) },
+      'Attendance submitted'
+    );
 
     res.status(201).json({
       message: responseMessage,
