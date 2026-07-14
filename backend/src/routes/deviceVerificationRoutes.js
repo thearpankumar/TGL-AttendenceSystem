@@ -58,14 +58,6 @@ router.post('/verify', (req, res) => {
     }
   }
   
-  if (metrics.hardwareConcurrency && metrics.hardwareConcurrency >= 16 && uaClaimsMobile) {
-    inconsistencies.push('Server: Very high CPU cores with mobile UA (desktop pattern)');
-  }
-  
-  if (metrics.deviceMemory && metrics.deviceMemory >= 16 && uaClaimsMobile) {
-    inconsistencies.push('Server: Very high memory with mobile UA (desktop pattern)');
-  }
-  
   const allIssues = [...inconsistencies, ...serverSideChecks];
   const isValid = allIssues.length === 0;
   

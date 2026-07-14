@@ -67,20 +67,8 @@ function detectEmulation(): { isEmulation: boolean; inconsistencies: string[]; m
   const isDesktopGPU = desktopGPUPatterns.test(webglInfo.renderer);
   const isMobileGPU = /Adreno|Mali|PowerVR|Apple GPU|Intel.* HD Graphics/i.test(webglInfo.renderer);
   
-  if (maxTouchPoints === 1 && claimsMobileUA) {
-    inconsistencies.push('maxTouchPoints exactly 1 with mobile UA (DevTools emulation pattern)');
-  }
-  
   if (claimsMobileUA && isDesktopGPU && !isMobileGPU) {
     inconsistencies.push('Desktop GPU detected with mobile User-Agent');
-  }
-  
-  if (claimsMobileUA && hardwareConcurrency >= 8) {
-    inconsistencies.push('High CPU cores (>=8) with mobile UA (typical desktop pattern)');
-  }
-  
-  if (claimsMobileUA && deviceMemory && deviceMemory >= 8) {
-    inconsistencies.push('High device memory (>=8GB) with mobile UA');
   }
   
   if (claimsMobileUA && hasFinePointer && !hasCoarsePointer && maxTouchPoints === 0) {
@@ -89,10 +77,6 @@ function detectEmulation(): { isEmulation: boolean; inconsistencies: string[]; m
   
   if (/iPhone|iPad/.test(ua) && !/Safari/.test(ua)) {
     inconsistencies.push('Claims iOS but missing Safari signature (spoofed UA)');
-  }
-  
-  if (/iPad/.test(ua) && platform === 'MacIntel' && maxTouchPoints === 0) {
-    inconsistencies.push('Claims iPad but MacIntel platform with no touch');
   }
   
   if (/Android/.test(ua) && !/Linux/.test(ua) && !/Mobile/.test(ua)) {
@@ -105,10 +89,6 @@ function detectEmulation(): { isEmulation: boolean; inconsistencies: string[]; m
   
   if (claimsDesktopUA && maxTouchPoints > 0 && hasCoarsePointer) {
     inconsistencies.push('Desktop UA but touch device detected (possible emulation having UA issues)');
-  }
-  
-  if (devicePixelRatio === 1 && claimsMobileUA && !/iPad/.test(ua)) {
-    inconsistencies.push('DPI ratio of 1 with mobile UA (unusual for phones)');
   }
 
   const metrics: DeviceMetrics = {

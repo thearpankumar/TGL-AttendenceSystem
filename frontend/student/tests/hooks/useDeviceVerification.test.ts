@@ -155,23 +155,6 @@ describe('Device Verification Security Scenarios', () => {
     vi.clearAllMocks();
   });
 
-  it('flags DevTools device emulation (maxTouchPoints === 1)', () => {
-    mockDeviceVerification({
-      isValid: false,
-      isEmulation: true,
-      inconsistencies: ['maxTouchPoints exactly 1 with mobile UA (DevTools emulation pattern)'],
-      metrics: {
-        maxTouchPoints: 1,
-        hardwareConcurrency: 16,
-        deviceMemory: 32,
-      } as any,
-    });
-    
-    const { result } = renderHook(() => useMobileVerification());
-    
-    expect(result.current.isEmulation).toBe(true);
-    expect(result.current.inconsistencies.some(i => i.includes('maxTouchPoints'))).toBe(true);
-  });
 
   it('flags desktop GPU with mobile UA', () => {
     mockDeviceVerification({
@@ -188,35 +171,6 @@ describe('Device Verification Security Scenarios', () => {
     expect(result.current.isEmulation).toBe(true);
   });
 
-  it('flags high CPU cores with mobile UA', () => {
-    mockDeviceVerification({
-      isValid: false,
-      isEmulation: true,
-      inconsistencies: ['High CPU cores (>=8) with mobile UA (typical desktop pattern)'],
-      metrics: {
-        hardwareConcurrency: 16,
-      } as any,
-    });
-    
-    const { result } = renderHook(() => useMobileVerification());
-    
-    expect(result.current.inconsistencies.some(i => i.includes('CPU cores'))).toBe(true);
-  });
-
-  it('flags high memory with mobile UA', () => {
-    mockDeviceVerification({
-      isValid: false,
-      isEmulation: true,
-      inconsistencies: ['High device memory (>=8GB) with mobile UA'],
-      metrics: {
-        deviceMemory: 32,
-      } as any,
-    });
-    
-    const { result } = renderHook(() => useMobileVerification());
-    
-    expect(result.current.inconsistencies.some(i => i.includes('memory'))).toBe(true);
-  });
 
   it('flags iOS UA without Safari signature', () => {
     mockDeviceVerification({
@@ -278,16 +232,14 @@ describe('Device Verification Security Scenarios', () => {
       isValid: false,
       isEmulation: true,
       inconsistencies: [
-        'maxTouchPoints exactly 1 with mobile UA (DevTools emulation pattern)',
         'Desktop GPU detected with mobile User-Agent',
-        'High CPU cores (>=8) with mobile UA (typical desktop pattern)',
-        'High device memory (>=8GB) with mobile UA',
+        'Mobile UA but fine pointer with no touch (desktop mouse/keyboard)',
       ],
     });
     
     const { result } = renderHook(() => useMobileVerification());
     
-    expect(result.current.inconsistencies.length).toBeGreaterThanOrEqual(4);
+    expect(result.current.inconsistencies.length).toBeGreaterThanOrEqual(2);
     expect(result.current.isEmulation).toBe(true);
     expect(result.current.isMobile).toBe(false);
   });
@@ -443,11 +395,10 @@ describe('Security Tests', () => {
     mockDeviceVerification({
       isValid: false,
       isEmulation: true,
-      inconsistencies: ['Desktop GPU detected with mobile User-Agent', 'High CPU cores (>=8) with mobile UA'],
+      inconsistencies: ['Desktop GPU detected with mobile User-Agent'],
       metrics: {
         userAgent: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
         webglRenderer: 'NVIDIA GeForce GTX 1080',
-        hardwareConcurrency: 16,
       } as any,
     });
     
@@ -456,44 +407,24 @@ describe('Security Tests', () => {
     expect(result.current.isEmulation).toBe(true);
   });
 
-  it('detects Chrome DevTools mobile mode', () => {
-    mockDeviceVerification({
-      isValid: false,
-      isEmulation: true,
-      inconsistencies: ['maxTouchPoints exactly 1 with mobile UA (DevTools emulation pattern)'],
-      metrics: {
-        maxTouchPoints: 1,
-        userAgent: 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
-      } as any,
-    });
-    
-    const { result } = renderHook(() => useMobileVerification());
-    
-    expect(result.current.isEmulation).toBe(true);
-    expect(result.current.isMobile).toBe(false);
-  });
 
   it('detects suspiciously perfect emulation', () => {
     mockDeviceVerification({
       isValid: false,
       isEmulation: true,
       inconsistencies: [
-        'maxTouchPoints exactly 1 with mobile UA (DevTools emulation pattern)',
         'Desktop GPU detected with mobile User-Agent',
-        'High CPU cores (>=8) with mobile UA (typical desktop pattern)',
-        'High device memory (>=8GB) with mobile UA',
+        'Mobile UA but fine pointer with no touch (desktop mouse/keyboard)',
       ],
       metrics: {
         maxTouchPoints: 1,
-        hardwareConcurrency: 16,
-        deviceMemory: 64,
         webglRenderer: 'NVIDIA GeForce RTX 4090',
       } as any,
     });
     
     const { result } = renderHook(() => useMobileVerification());
     
-    expect(result.current.inconsistencies.length).toBeGreaterThan(2);
+    expect(result.current.inconsistencies.length).toBeGreaterThan(1);
     expect(result.current.isEmulation).toBe(true);
   });
 
