@@ -224,7 +224,7 @@ const Batches = () => {
         </button>
       </div>
 
-      <div className="card">
+      <div className="card card-table">
         {loading ? (
           <div className="loading">Loading batches...</div>
         ) : batches.length === 0 ? (
