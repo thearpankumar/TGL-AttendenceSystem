@@ -13,7 +13,7 @@ const logger = require('../utils/logger').child({ module: 'session' });
 
 const createSession = async (req, res) => {
   try {
-    const { locationId, durationMinutes, description } = req.body;
+    const { locationId, durationMinutes, description, batchId } = req.body;
 
     const location = await Location.findOne({
       _id: locationId,
@@ -33,6 +33,7 @@ const createSession = async (req, res) => {
 
     const session = await Session.create({
       locationId,
+      batchId: batchId || null,
       tokenHash,
       tokenPrefix,
       description,
@@ -62,6 +63,7 @@ const getSessions = async (req, res) => {
   try {
     const sessions = await Session.find({ createdBy: req.admin._id })
       .populate('locationId', 'name latitude longitude radiusMeters')
+      .populate('batchId', 'name')
       .select('-totpSecret')
       .sort({ createdAt: -1 });
 
@@ -90,7 +92,9 @@ const getSessionById = async (req, res) => {
     const session = await Session.findOne({
       _id: req.params.id,
       createdBy: req.admin._id,
-    }).populate('locationId', 'name latitude longitude radiusMeters');
+    })
+      .populate('locationId', 'name latitude longitude radiusMeters')
+      .populate('batchId', 'name');
 
     if (!session) {
       return res.status(404).json({ message: 'Session not found' });
@@ -202,7 +206,7 @@ const exportSessionAttendance = async (req, res) => {
     const session = await Session.findOne({
       _id: req.params.id,
       createdBy: req.admin._id,
-    }).populate('locationId');
+    }).populate('locationId').populate('batchId');
 
     if (!session) {
       return res.status(404).json({ message: 'Session not found' });
@@ -222,31 +226,77 @@ const exportSessionAttendance = async (req, res) => {
     const worksheet = workbook.addWorksheet('Attendance');
 
     const locationName = session.locationId?.name || 'Unknown Location';
-    
-    worksheet.columns = [
-      { header: 'Roll Number', key: 'rollNumber', width: 15 },
-      { header: 'Student Name', key: 'studentName', width: 25 },
-      { header: 'Location', key: 'location', width: 20 },
-      { header: 'Time (UTC)', key: 'time', width: 20 },
-      { header: 'Location Status', key: 'locStatus', width: 15 },
-      { header: 'Distance (m)', key: 'distance', width: 15 },
-      { header: 'Device Identity', key: 'deviceInfo', width: 35 },
-      { header: 'Warnings', key: 'warnings', width: 40 },
-    ];
+    const batch = session.batchId;
 
-    const cursor = Attendance.find({ sessionId: session._id, verified: true }).cursor();
-
-    for await (const record of cursor) {
-      worksheet.addRow({
-        rollNumber: record.rollNumber,
-        studentName: record.studentName,
-        location: locationName,
-        time: new Date(record.capturedAt).toISOString(),
-        locStatus: record.verified ? 'Verified' : 'Flagged',
-        distance: record.distanceFromLocation != null ? record.distanceFromLocation.toFixed(2) : 'N/A',
-        deviceInfo: record.deviceFingerprint ? record.deviceFingerprint.substring(0, 16) : 'Unknown',
-        warnings: record.deviceFlag ? record.deviceFlag : (record.isDevBypass ? 'Mock Location/Camera' : 'None'),
-      }).commit();
+    if (batch) {
+      worksheet.columns = [
+        { header: 'Status', key: 'attendanceStatus', width: 12 },
+        { header: 'Roll Number', key: 'rollNumber', width: 15 },
+        { header: 'Student Name', key: 'studentName', width: 25 },
+        { header: 'College Name', key: 'collegeName', width: 25 },
+        { header: 'Location', key: 'location', width: 20 },
+        { header: 'Time (UTC)', key: 'time', width: 20 },
+        { header: 'Distance (m)', key: 'distance', width: 15 },
+        { header: 'Device Identity', key: 'deviceInfo', width: 35 },
+      ];
+      
+      const verifiedRecords = await Attendance.find({ sessionId: session._id, verified: true });
+      const presentMap = new Map();
+      verifiedRecords.forEach(r => presentMap.set(r.rollNumber.toUpperCase(), r));
+      
+      for (const student of batch.students) {
+        const rollUpper = student.rollNumber.toUpperCase();
+        if (presentMap.has(rollUpper)) {
+          const record = presentMap.get(rollUpper);
+          worksheet.addRow({
+            attendanceStatus: 'Present',
+            rollNumber: record.rollNumber,
+            studentName: record.studentName,
+            collegeName: student.collegeName || '-',
+            location: locationName,
+            time: new Date(record.capturedAt).toISOString(),
+            distance: record.distanceFromLocation != null ? record.distanceFromLocation.toFixed(2) : 'N/A',
+            deviceInfo: record.deviceFingerprint ? record.deviceFingerprint.substring(0, 16) : 'Unknown',
+          }).commit();
+        } else {
+          worksheet.addRow({
+            attendanceStatus: 'Absent',
+            rollNumber: student.rollNumber,
+            studentName: student.name,
+            collegeName: student.collegeName || '-',
+            location: 'N/A',
+            time: 'N/A',
+            distance: 'N/A',
+            deviceInfo: 'N/A',
+          }).commit();
+        }
+      }
+    } else {
+      worksheet.columns = [
+        { header: 'Roll Number', key: 'rollNumber', width: 15 },
+        { header: 'Student Name', key: 'studentName', width: 25 },
+        { header: 'Location', key: 'location', width: 20 },
+        { header: 'Time (UTC)', key: 'time', width: 20 },
+        { header: 'Location Status', key: 'locStatus', width: 15 },
+        { header: 'Distance (m)', key: 'distance', width: 15 },
+        { header: 'Device Identity', key: 'deviceInfo', width: 35 },
+        { header: 'Warnings', key: 'warnings', width: 40 },
+      ];
+  
+      const cursor = Attendance.find({ sessionId: session._id, verified: true }).cursor();
+  
+      for await (const record of cursor) {
+        worksheet.addRow({
+          rollNumber: record.rollNumber,
+          studentName: record.studentName,
+          location: locationName,
+          time: new Date(record.capturedAt).toISOString(),
+          locStatus: record.verified ? 'Verified' : 'Flagged',
+          distance: record.distanceFromLocation != null ? record.distanceFromLocation.toFixed(2) : 'N/A',
+          deviceInfo: record.deviceFingerprint ? record.deviceFingerprint.substring(0, 16) : 'Unknown',
+          warnings: record.deviceFlag ? record.deviceFlag : (record.isDevBypass ? 'Mock Location/Camera' : 'None'),
+        }).commit();
+      }
     }
 
     await worksheet.commit();
@@ -572,6 +622,34 @@ const getDevicesForSession = async (req, res) => {
   }
 };
 
+const getSessionAbsent = async (req, res) => {
+  try {
+    const session = await Session.findOne({
+      _id: req.params.id,
+      createdBy: req.admin._id,
+    }).populate('batchId');
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    if (!session.batchId) {
+      return res.json([]);
+    }
+
+    const verifiedRecords = await Attendance.find({ sessionId: session._id, verified: true });
+    const presentRolls = new Set(verifiedRecords.map(r => r.rollNumber.toUpperCase()));
+
+    const absentStudents = session.batchId.students.filter(
+      s => !presentRolls.has(s.rollNumber.toUpperCase())
+    );
+
+    res.json(absentStudents);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   createSession,
   getSessions,
@@ -588,4 +666,5 @@ module.exports = {
   exportSessionAttendance,
   patchAttendanceVerification,
   bulkPatchAttendanceVerification,
+  getSessionAbsent,
 };

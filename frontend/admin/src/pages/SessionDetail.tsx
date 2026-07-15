@@ -16,6 +16,13 @@ interface Session {
   totpEnabled?: boolean;
   locationId?: { name: string };
   description?: string;
+  batchId?: { _id: string; name: string };
+}
+
+interface AbsentStudent {
+  name: string;
+  rollNumber: string;
+  collegeName: string;
 }
 
 interface AttendanceRecord {
@@ -34,7 +41,7 @@ interface AttendanceRecord {
 
 interface Stats { totalAttendance: number; verifiedAttendance: number; }
 
-type ActiveTab = 'all' | 'verified' | 'unverified';
+type ActiveTab = 'all' | 'verified' | 'unverified' | 'absent';
 
 const parseUA = (ua?: string) => {
   if (!ua) return 'N/A';
@@ -61,6 +68,7 @@ const SessionDetail = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [absentStudents, setAbsentStudents] = useState<AbsentStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'rotate' | 'deactivate' | null>(null);
@@ -92,14 +100,16 @@ const SessionDetail = () => {
   // ── Fetch ───────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
-      const [sessionRes, attendanceRes, statsRes] = await Promise.all([
+      const [sessionRes, attendanceRes, statsRes, absentRes] = await Promise.all([
         axios.get<Session>(`/api/admin/sessions/${id}`),
         axios.get<AttendanceRecord[]>(`/api/admin/sessions/${id}/attendance`),
         axios.get<Stats>(`/api/admin/sessions/${id}/stats`),
+        axios.get<AbsentStudent[]>(`/api/admin/sessions/${id}/absent`).catch(() => ({ data: [] })),
       ]);
       setSession(sessionRes.data);
       setAttendance(attendanceRes.data);
       setStats(statsRes.data);
+      setAbsentStudents(absentRes.data);
     } catch { toast.error('Failed to fetch session data'); }
     finally { setLoading(false); }
   }, [id]);
@@ -384,6 +394,18 @@ const SessionDetail = () => {
               </span>
               <span className="detail-value">{session.rotationCount}</span>
             </div>
+            {session.batchId && (
+              <div className="session-detail-item">
+                <span className="detail-label">
+                  <Users size={14} /> Batch:
+                </span>
+                <span className="detail-value">
+                  <span className="status-pill" style={{ background: 'var(--color-primary-subtle)', color: 'var(--color-primary)', border: '1px solid var(--color-primary)' }}>
+                    {session.batchId.name}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="session-actions-new">
@@ -509,7 +531,7 @@ const SessionDetail = () => {
             className="status-tabs"
             title={selectedIds.size > 0 ? 'Clear selection before switching tabs' : undefined}
           >
-            {(['all', 'verified', 'unverified'] as ActiveTab[]).map(tab => (
+            {(['all', 'verified', 'unverified', ...(session.batchId ? ['absent'] : [])] as ActiveTab[]).map(tab => (
               <button
                 key={tab}
                 id={`tab-${tab}`}
@@ -520,7 +542,7 @@ const SessionDetail = () => {
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 <span className="tab-count">
-                  {tab === 'all' ? attendance.length : tab === 'verified' ? verifiedCount : unverifiedCount}
+                  {tab === 'all' ? attendance.length : tab === 'verified' ? verifiedCount : tab === 'unverified' ? unverifiedCount : absentStudents.length}
                 </span>
               </button>
             ))}
@@ -528,7 +550,40 @@ const SessionDetail = () => {
         </div>
 
         {/* ── Table ─────────────────────────────────────── */}
-        {filteredAttendance.length === 0 ? (
+        {activeTab === 'absent' ? (
+          absentStudents.length === 0 ? (
+            <div className="empty-state" style={{ marginTop: 'var(--space-4)', padding: '3rem' }}>
+              <CheckCircle size={48} className="text-success" style={{ marginBottom: '1rem', opacity: 0.8 }} />
+              <h3>Perfect Attendance!</h3>
+              <p>All students in this batch have successfully checked in.</p>
+            </div>
+          ) : (
+            <div className="table-scroll" style={{ marginTop: 'var(--space-4)' }}>
+              <table className="table" style={{ minWidth: 600 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Roll No.</th>
+                    <th style={{ textAlign: 'left' }}>Student Name</th>
+                    <th style={{ textAlign: 'left' }}>College Name</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {absentStudents.map(student => (
+                    <tr key={student.rollNumber}>
+                      <td><strong>{student.rollNumber}</strong></td>
+                      <td>{student.name}</td>
+                      <td>{student.collegeName || '-'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <Badge tone="danger">Absent</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : filteredAttendance.length === 0 ? (
           <p style={{ padding: 'var(--space-6)' }}>
             {attendance.length === 0 ? 'No attendance records yet' : `No ${activeTab} records`}
           </p>

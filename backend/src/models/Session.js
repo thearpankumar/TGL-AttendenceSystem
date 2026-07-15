@@ -7,6 +7,11 @@ const sessionSchema = new mongoose.Schema({
     ref: 'Location',
     required: true,
   },
+  batchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Batch',
+    default: null,
+  },
   tokenHash: {
     type: String,
     required: true,

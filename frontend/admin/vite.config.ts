@@ -18,6 +18,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'admin-assets',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
   test: {
     environment: 'jsdom',

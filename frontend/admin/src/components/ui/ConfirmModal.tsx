@@ -21,49 +21,31 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const isDanger = confirmText.toLowerCase().includes('delete') || confirmText.toLowerCase().includes('detach');
+  const confirmClass = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999
-    }}>
-      <div style={{
-        backgroundColor: '#fff',
-        padding: '24px',
-        borderRadius: '8px',
-        width: '100%',
-        maxWidth: '400px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-      }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.25rem' }}>{title}</h3>
-        <p style={{ margin: '0 0 24px 0', color: '#4b5563' }}>{message}</p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ overflow: 'hidden' }}>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button className="modal-close" onClick={onCancel} aria-label="Close">&times;</button>
+        </div>
+        <p style={{ margin: '0 0 var(--space-5) 0', color: 'var(--color-muted)', fontSize: '14.5px', lineHeight: 1.5 }}>
+          {message}
+        </p>
+        <div className="form-actions" style={{ justifyContent: 'flex-end', marginTop: 'var(--space-5)', gap: '12px' }}>
           <button
+            type="button"
+            className="btn btn-secondary"
             onClick={onCancel}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: '1px solid #d1d5db',
-              backgroundColor: '#fff',
-              cursor: 'pointer'
-            }}
           >
             {cancelText}
           </button>
           <button
+            type="button"
+            className={confirmClass}
             onClick={onConfirm}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: '#ef4444',
-              color: '#fff',
-              cursor: 'pointer'
-            }}
           >
             {confirmText}
           </button>

@@ -1385,3 +1385,54 @@ code {
   .grid     { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
 }
+
+/* File Drop Zone */
+.file-drop-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.file-drop-zone:hover, .file-drop-zone.dragging {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle, rgba(99, 102, 241, 0.05));
+}
+
+.file-drop-zone.has-file {
+  border-style: solid;
+  border-color: var(--color-success, #22c55e);
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.file-selected-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-name {
+  font-weight: 500;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.file-size {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.click-to-change {
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  margin-top: 4px;
+}

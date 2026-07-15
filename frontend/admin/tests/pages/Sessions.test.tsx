@@ -9,12 +9,14 @@ const makeMockGet = ({
   sessions = [] as object[],
   locations = [] as object[],
   shortLinks = [] as object[],
+  batches = [] as object[],
 } = {}) =>
   (url: string) => {
     if (url.includes('/sessions')) return Promise.resolve({ data: sessions });
     if (url.includes('/locations')) return Promise.resolve({ data: locations });
     if (url.includes('/shortlinks')) return Promise.resolve({ data: { shortLinks } });
-    return Promise.resolve({ data: {} });
+    if (url.includes('/batches')) return Promise.resolve({ data: batches });
+    return Promise.resolve({ data: [] });
   };
 
 const ACTIVE_SESSION = {

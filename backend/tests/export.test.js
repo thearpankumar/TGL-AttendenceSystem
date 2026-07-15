@@ -4,6 +4,7 @@ const Session = require('../src/models/Session');
 const Admin = require('../src/models/Admin');
 const Location = require('../src/models/Location');
 const Attendance = require('../src/models/Attendance');
+const Batch = require('../src/models/Batch');
 const ExcelJS = require('exceljs');
 
 let app;
@@ -180,6 +181,89 @@ describe('Export Session Attendance to Excel', () => {
     const worksheet = workbook.getWorksheet('Attendance');
     // Only header row — no data rows
     expect(worksheet.rowCount).toBe(1);
+  });
+
+  test('should export batch roster with Present and Absent statuses when batch is attached', async () => {
+    const batch = await Batch.create({
+      name: 'Test Batch',
+      createdBy: admin._id,
+      students: [
+        { name: 'Alice', rollNumber: 'A001', collegeName: 'Test College', email: 'alice@test.com' },
+        { name: 'Bob', rollNumber: 'B002', collegeName: 'Test College', email: 'bob@test.com' },
+        { name: 'Charlie', rollNumber: 'C003', collegeName: 'Test College' }
+      ]
+    });
+
+    // Attach batch to session
+    await Session.updateOne({ _id: session._id }, { batchId: batch._id });
+
+    // Alice is present
+    await Attendance.create({
+      sessionId: session._id,
+      studentName: 'Alice',
+      studentId: 'A001',
+      rollNumber: 'A001',
+      distanceFromLocation: 25.4,
+      studentLatitude: 12.0,
+      studentLongitude: 77.0,
+      photoUrl: 'https://example.com/photo.jpg',
+      photoPublicId: 'photo1',
+      capturedAt: new Date(),
+      verified: true
+    });
+
+    // Bob is unverified (counts as Absent)
+    await Attendance.create({
+      sessionId: session._id,
+      studentName: 'Bob',
+      studentId: 'B002',
+      rollNumber: 'B002',
+      distanceFromLocation: 500,
+      studentLatitude: 13.0,
+      studentLongitude: 78.0,
+      photoUrl: 'https://example.com/photo.jpg',
+      photoPublicId: 'photo2',
+      capturedAt: new Date(),
+      verified: false
+    });
+
+    // Charlie has no record (counts as Absent)
+
+    const res = await request(app)
+      .get(`/api/admin/sessions/${session._id}/export`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        let data = Buffer.from('');
+        r.on('data', chunk => data = Buffer.concat([data, chunk]));
+        r.on('end', () => cb(null, data));
+      })
+      .expect(200);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(res.body);
+    const worksheet = workbook.getWorksheet('Attendance');
+    
+    const headers = worksheet.getRow(1).values.slice(1);
+    expect(headers).toContain('Status');
+    expect(headers).toContain('Roll Number');
+    expect(headers).toContain('College Name');
+    
+    // Batch has 3 students, all should be listed
+    expect(worksheet.rowCount).toBe(4); // 1 header + 3 data rows
+    
+    const statuses = {};
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        const status = row.getCell(1).value;
+        const roll = row.getCell(2).value;
+        statuses[roll] = status;
+      }
+    });
+
+    expect(statuses['A001']).toBe('Present');
+    expect(statuses['B002']).toBe('Absent'); // Unverified
+    expect(statuses['C003']).toBe('Absent'); // No record
   });
 });
 

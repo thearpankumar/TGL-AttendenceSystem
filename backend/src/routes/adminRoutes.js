@@ -5,6 +5,13 @@ const locationController = require('../controllers/locationController');
 const sessionController = require('../controllers/sessionController');
 const shortLinkController = require('../controllers/shortLinkController');
 const webauthnController = require('../controllers/webauthnController');
+const batchController = require('../controllers/batchController');
+const multer = require('multer');
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for CSV/Excel
+});
 const { protect } = require('../middleware/auth');
 const {
   validateAdmin,
@@ -43,6 +50,7 @@ router.get('/sessions/:id/stats', sessionController.getSessionStats);
 router.get('/sessions/:id/totp', sessionController.getSessionTOTP);
 router.get('/sessions/:id/devices', sessionController.getDevicesForSession);
 router.get('/sessions/:id/export', sessionController.exportSessionAttendance);
+router.get('/sessions/:id/absent', sessionController.getSessionAbsent);
 
 router.get('/flagged', sessionController.getFlaggedAttendance);
 router.patch('/attendance/:id/review', sessionController.reviewAttendanceFlag);
@@ -62,5 +70,10 @@ router.post('/webauthn/suspend', webauthnController.suspendCredential);
 router.post('/webauthn/unsuspend', webauthnController.unsuspendCredential);
 router.get('/webauthn/credentials', webauthnController.getCredentials);
 router.get('/webauthn/stats', webauthnController.getWebAuthnStats);
+
+router.post('/batches', upload.single('file'), batchController.createBatch);
+router.get('/batches', batchController.getBatches);
+router.get('/batches/:id', batchController.getBatchById);
+router.delete('/batches/:id', batchController.deleteBatch);
 
 module.exports = router;

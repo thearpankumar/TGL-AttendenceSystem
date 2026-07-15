@@ -7,6 +7,7 @@ import Locations from './pages/Locations';
 import Sessions from './pages/Sessions';
 import SessionDetail from './pages/SessionDetail';
 import ShortLinks from './pages/ShortLinks';
+import Batches from './pages/Batches';
 import QRDisplay from './pages/QRDisplay';
 import FlaggedAttendance from './pages/FlaggedAttendance';
 import WebAuthnCredentials from './pages/WebAuthnCredentials';
@@ -35,6 +36,7 @@ function App() {
         <Route path="/sessions/:id" element={<PrivateRoute><SessionDetail /></PrivateRoute>} />
         <Route path="/sessions/:id/qr" element={admin ? <QRDisplay /> : <Navigate to="/login" />} />
         <Route path="/shortlinks" element={<PrivateRoute><ShortLinks /></PrivateRoute>} />
+        <Route path="/batches" element={<PrivateRoute><Batches /></PrivateRoute>} />
         <Route path="/flagged" element={<PrivateRoute><FlaggedAttendance /></PrivateRoute>} />
         <Route path="/webauthn" element={<PrivateRoute><WebAuthnCredentials /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />

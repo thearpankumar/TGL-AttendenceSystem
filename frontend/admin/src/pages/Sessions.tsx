@@ -17,6 +17,7 @@ import { SkeletonRows } from '../components/ui/Skeleton';
 
 interface Location { _id: string; name: string; radiusMeters: number; }
 interface ShortLink { _id: string; shortCode: string; isActive: boolean; sessionId?: unknown; }
+interface Batch { _id: string; name: string; studentCount: number; }
 type ShortlinkMode = 'auto' | 'custom' | 'existing';
 interface Session {
   _id: string;
@@ -31,6 +32,7 @@ interface Session {
 const Sessions = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,6 +42,7 @@ const Sessions = () => {
     shortlinkMode: 'auto' as ShortlinkMode,
     customShortCode: '',
     existingShortCode: '',
+    batchId: '',
   });
   const [activeShortLinks, setActiveShortLinks] = useState<ShortLink[]>([]);
   const [reassignConfirm, setReassignConfirm] = useState({ open: false, shortCode: '' });
@@ -53,14 +56,16 @@ const Sessions = () => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     try {
-      const [sessionsRes, locationsRes, shortLinksRes] = await Promise.all([
+      const [sessionsRes, locationsRes, shortLinksRes, batchesRes] = await Promise.all([
         axios.get<Session[]>('/api/admin/sessions', { signal: abortRef.current.signal }),
         axios.get<Location[]>('/api/admin/locations', { signal: abortRef.current.signal }),
         axios.get<{ shortLinks: ShortLink[] }>('/api/admin/shortlinks', { signal: abortRef.current.signal }),
+        axios.get<Batch[]>('/api/admin/batches', { signal: abortRef.current.signal }),
       ]);
       setSessions(sessionsRes.data);
       setLocations(locationsRes.data);
       setActiveShortLinks((shortLinksRes.data.shortLinks ?? []).filter((l) => l.isActive));
+      setBatches(batchesRes.data);
     } catch (error) {
       if ((error as { name?: string }).name !== 'CanceledError') toast.error('Failed to fetch data');
     } finally { setLoading(false); }
@@ -118,6 +123,7 @@ const Sessions = () => {
         locationId: formData.locationId,
         durationMinutes: duration,
         description: formData.description,
+        batchId: formData.batchId || null,
       });
 
       const sessionId = res.data._id;
@@ -143,7 +149,7 @@ const Sessions = () => {
 
       toast.success(successMessage);
       setShowModal(false);
-      setFormData({ locationId: '', durationMinutes: 30, description: '', shortlinkMode: 'auto', customShortCode: '', existingShortCode: '' });
+      setFormData({ locationId: '', durationMinutes: 30, description: '', shortlinkMode: 'auto', customShortCode: '', existingShortCode: '', batchId: '' });
       fetchData();
     } catch (error) {
       const err = error as { response?: { data?: { message?: string } } };
@@ -224,6 +230,17 @@ const Sessions = () => {
             <label>Description (optional)</label>
             <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={2} placeholder="e.g., Morning attendance for CS101" />
           </div>
+          
+          <div className="form-group">
+            <label htmlFor="session-batch">Attach Batch (Optional)</label>
+            <select id="session-batch" value={formData.batchId} onChange={(e) => setFormData({ ...formData, batchId: e.target.value })}>
+              <option value="">No Batch</option>
+              {(batches || []).map((batch) => (
+                <option key={batch._id} value={batch._id}>{batch.name} ({batch.studentCount} students)</option>
+              ))}
+            </select>
+          </div>
+          
           {/* ── Short Link mode selector ── */}
           <div className="form-group" style={{ marginTop: '1rem' }}>
             <label>Short Link</label>
