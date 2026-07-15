@@ -110,8 +110,8 @@ describe('Sessions', () => {
     fireEvent.click(screen.getAllByText('Create Session')[0]);
     // Switch to "Attach existing" mode
     fireEvent.click(screen.getByText(/Attach existing/i));
-    // Dropdown with free link should appear
-    await waitFor(() => expect(screen.getByText('/s/cs101')).toBeInTheDocument());
+    // Dropdown with link should appear
+    await waitFor(() => expect(screen.getByText(/\/s\/cs101/)).toBeInTheDocument());
 
     // Select location (by label to avoid ambiguity with the links dropdown)
     fireEvent.change(screen.getByLabelText(/^Location$/i), { target: { value: 'loc1' } });
@@ -122,15 +122,15 @@ describe('Sessions', () => {
 
     await waitFor(() => {
       expect(axios.post).toHaveBeenCalledWith('/api/admin/sessions', expect.any(Object));
-      expect(axios.post).toHaveBeenCalledWith('/api/admin/shortlinks/cs101/attach', { sessionId: 'new-session-id' });
+      expect(axios.post).toHaveBeenCalledWith('/api/admin/shortlinks/cs101/attach', { sessionId: 'new-session-id', force: true });
     });
   });
 
-  it('attach existing mode: shows warning when no free links are available', async () => {
-    // No free links — all shortLinks have sessionId set
+  it('attach existing mode: shows warning when no active links are available', async () => {
+    // No active links
     (axios.get as any).mockImplementation(makeMockGet({
       locations: [LOCATION],
-      shortLinks: [{ ...FREE_LINK, sessionId: 'some-other-session' }],
+      shortLinks: [],
     }));
 
     renderComponent();
@@ -140,8 +140,32 @@ describe('Sessions', () => {
     fireEvent.click(screen.getByText(/Attach existing/i));
 
     await waitFor(() =>
-      expect(screen.getByText(/No unassigned short links available/i)).toBeInTheDocument()
+      expect(screen.getByText(/No active short links available/i)).toBeInTheDocument()
     );
+  });
+
+  it('attach existing mode: shows reassignment modal when selecting an in-use link', async () => {
+    (axios.get as any).mockImplementation(makeMockGet({
+      locations: [LOCATION],
+      shortLinks: [{ ...FREE_LINK, sessionId: 'some-other-session' }],
+    }));
+
+    const { container } = renderComponent();
+    await waitFor(() => expect(screen.getAllByText('Create Session')[0]).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByText('Create Session')[0]);
+    fireEvent.click(screen.getByText(/Attach existing/i));
+
+    await waitFor(() => expect(screen.getByText(/\/s\/cs101 \(In use\)/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/^Location$/i), { target: { value: 'loc1' } });
+    const linkSelect = screen.getByDisplayValue('Pick a short link…');
+    fireEvent.change(linkSelect, { target: { value: 'cs101' } });
+    
+    // Submit should open the modal, not call the API immediately
+    fireEvent.submit(container.querySelector('form')!);
+    
+    await waitFor(() => expect(screen.getByText(/Short Link In Use/i)).toBeInTheDocument());
   });
 
   // ─── Delete ───────────────────────────────────────────────────────────────

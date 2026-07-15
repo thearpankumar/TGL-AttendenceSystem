@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ClipboardList, Sparkles, Link as LinkIcon, Pencil } from 'lucide-react';
+import { ClipboardList, Sparkles, Link as LinkIcon, Pencil, AlertTriangle } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import DataTable from '../components/ui/DataTable';
 import type { Column } from '../components/ui/DataTable';
@@ -41,7 +41,8 @@ const Sessions = () => {
     customShortCode: '',
     existingShortCode: '',
   });
-  const [freeShortLinks, setFreeShortLinks] = useState<ShortLink[]>([]);
+  const [activeShortLinks, setActiveShortLinks] = useState<ShortLink[]>([]);
+  const [reassignConfirm, setReassignConfirm] = useState({ open: false, shortCode: '' });
   const [deleteModal, setDeleteModal] = useState({ open: false, sessionId: '', attendanceCount: 0, locationName: '' });
   const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -59,7 +60,7 @@ const Sessions = () => {
       ]);
       setSessions(sessionsRes.data);
       setLocations(locationsRes.data);
-      setFreeShortLinks((shortLinksRes.data.shortLinks ?? []).filter((l) => !l.sessionId && l.isActive));
+      setActiveShortLinks((shortLinksRes.data.shortLinks ?? []).filter((l) => l.isActive));
     } catch (error) {
       if ((error as { name?: string }).name !== 'CanceledError') toast.error('Failed to fetch data');
     } finally { setLoading(false); }
@@ -79,8 +80,8 @@ const Sessions = () => {
     return { label: 'Active', tone: 'success' as const };
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleCreateSubmit = async (e?: FormEvent, forceReassign = false) => {
+    if (e) e.preventDefault();
     try {
       const duration = parseInt(String(formData.durationMinutes));
       if (isNaN(duration) || duration < 5 || duration > 480) { toast.error('Duration must be between 5 and 480 minutes'); return; }
@@ -88,6 +89,31 @@ const Sessions = () => {
         toast.error('Please select an existing short link, or switch to a different mode.');
         return;
       }
+
+      // Pre-flight check for custom short link
+      if (formData.shortlinkMode === 'custom' && formData.customShortCode.trim()) {
+        try {
+          await axios.get(`/api/admin/shortlinks/${formData.customShortCode.trim()}`);
+          toast.error(`Short link '/s/${formData.customShortCode.trim()}' already exists. Please choose another one.`);
+          return;
+        } catch (error) {
+          const err = error as { response?: { status?: number } };
+          if (err.response && err.response.status !== 404) {
+            toast.error(`Short link '/s/${formData.customShortCode.trim()}' is unavailable.`);
+            return;
+          }
+        }
+      }
+
+      // Pre-flight check for reassigning existing short link
+      if (formData.shortlinkMode === 'existing' && formData.existingShortCode && !forceReassign) {
+        const selectedLink = activeShortLinks.find(l => l.shortCode === formData.existingShortCode);
+        if (selectedLink && selectedLink.sessionId) {
+          setReassignConfirm({ open: true, shortCode: formData.existingShortCode });
+          return;
+        }
+      }
+
       const res = await axios.post<{ _id: string }>('/api/admin/sessions', {
         locationId: formData.locationId,
         durationMinutes: duration,
@@ -109,7 +135,7 @@ const Sessions = () => {
         await navigator.clipboard.writeText(link).catch(() => {});
         successMessage = `Session created! Link (/s/${slRes.data.shortCode}) copied to clipboard.`;
       } else if (formData.shortlinkMode === 'existing' && formData.existingShortCode) {
-        await axios.post(`/api/admin/shortlinks/${formData.existingShortCode}/attach`, { sessionId });
+        await axios.post(`/api/admin/shortlinks/${formData.existingShortCode}/attach`, { sessionId, force: true });
         const link = `${protocol}//${hostname}/s/${formData.existingShortCode}`;
         await navigator.clipboard.writeText(link).catch(() => {});
         successMessage = `Session created! Link (/s/${formData.existingShortCode}) copied to clipboard.`;
@@ -182,7 +208,7 @@ const Sessions = () => {
       ) : null}
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Create Attendance Session">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleCreateSubmit}>
           <div className="form-group">
             <label htmlFor="session-location">Location</label>
             <select id="session-location" value={formData.locationId} onChange={(e) => setFormData({ ...formData, locationId: e.target.value })} required>
@@ -237,13 +263,13 @@ const Sessions = () => {
 
           {formData.shortlinkMode === 'existing' && (
             <div className="form-group">
-              {freeShortLinks.length === 0 ? (
+              {activeShortLinks.length === 0 ? (
                 <div style={{
                   padding: '0.75rem', borderRadius: '6px', fontSize: '0.82rem',
                   background: 'var(--color-warning-subtle, #fffbeb)',
                   border: '1px solid var(--color-warning, #f59e0b)',
                 }}>
-                  ⚠️ No unassigned short links available.{' '}
+                  ⚠️ No active short links available.{' '}
                   <a href="/admin/shortlinks" style={{ color: 'var(--color-primary, #4f46e5)' }}>Create one on the Short Links page →</a>
                 </div>
               ) : (
@@ -252,11 +278,13 @@ const Sessions = () => {
                   <select id="existing-link" value={formData.existingShortCode}
                     onChange={(e) => setFormData({ ...formData, existingShortCode: e.target.value })} required>
                     <option value="">Pick a short link…</option>
-                    {freeShortLinks.map((l) => (
-                      <option key={l.shortCode} value={l.shortCode}>/s/{l.shortCode}</option>
+                    {activeShortLinks.map((l) => (
+                      <option key={l.shortCode} value={l.shortCode}>
+                        /s/{l.shortCode} {l.sessionId ? '(In use)' : '(Available)'}
+                      </option>
                     ))}
                   </select>
-                  <small style={{ color: 'var(--color-muted)' }}>This link will be re-activated and pointed at the new session.</small>
+                  <small style={{ color: 'var(--color-muted)' }}>If the link is in use, you will be asked to confirm reassignment.</small>
                 </>
               )}
             </div>
@@ -311,6 +339,44 @@ const Sessions = () => {
         onConfirm={() => deactivateId && handleDeactivate(deactivateId)}
         onCancel={() => setDeactivateId(null)}
       />
+
+      <Modal open={reassignConfirm.open} onClose={() => setReassignConfirm({ open: false, shortCode: '' })} title="">
+        <div style={{ textAlign: 'center', padding: '1rem 0.5rem' }}>
+          <div style={{ 
+            width: '64px', height: '64px', borderRadius: '16px', 
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.2))',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem',
+            boxShadow: '0 8px 32px rgba(245, 158, 11, 0.15)'
+          }}>
+            <AlertTriangle size={32} color="#fbbf24" />
+          </div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', color: '#fff' }}>Short Link In Use</h3>
+          <p style={{ color: 'var(--color-muted)', lineHeight: 1.6, marginBottom: '2rem' }}>
+            The short link <strong style={{ color: '#fff' }}>/s/{reassignConfirm.shortCode}</strong> is currently attached to another active session. 
+            <br/><br/>
+            If you continue, it will be forcefully reassigned to this new session, and the previous session will lose this link.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setReassignConfirm({ open: false, shortCode: '' })}>
+              Cancel
+            </button>
+            <button type="button" 
+              onClick={() => { setReassignConfirm({ open: false, shortCode: '' }); handleCreateSubmit(undefined, true); }}
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 'var(--radius-sm)',
+                fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.25)',
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              Reassign & Create
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

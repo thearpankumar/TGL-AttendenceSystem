@@ -104,12 +104,12 @@ async function getShortLinkByCode(req, res) {
 async function attachShortLinkToSession(req, res) {
   try {
     const { shortCode } = req.params;
-    const { sessionId } = req.body;
+    const { sessionId, force } = req.body;
     const shortLink = await ShortLink.findOne({ shortCode: shortCode.toLowerCase() });
     if (!shortLink) {
       return res.status(404).json({ message: 'Short link not found' });
     }
-    if (shortLink.sessionId && shortLink.sessionId.toString() !== sessionId) {
+    if (shortLink.sessionId && shortLink.sessionId.toString() !== sessionId && !force) {
       return res.status(400).json({ 
         message: 'Short link is already attached to another session',
         currentSessionId: shortLink.sessionId 
