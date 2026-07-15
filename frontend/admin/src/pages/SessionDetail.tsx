@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { QrCode, CheckCircle, XCircle, X } from 'lucide-react';
+import { QrCode, CheckCircle, XCircle, X, MapPin, Clock, Calendar, RefreshCw, Users, ShieldCheck, User, AlertCircle } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
-import StatTile from '../components/ui/StatTile';
 import Badge from '../components/ui/Badge';
 import ConfirmModal from '../components/ui/ConfirmModal';
 import { SkeletonTiles, SkeletonRows } from '../components/ui/Skeleton';
@@ -346,24 +345,100 @@ const SessionDetail = () => {
       <PageHeader title="Session Details" />
 
       {/* ── Session overview ───────────────────────────── */}
-      <div className="session-overview">
-        <div className="card">
-          <h3 style={{ marginBottom: 'var(--space-3)' }}>Session Info</h3>
-          <p><strong>Location:</strong> {session.locationId?.name || 'Unknown'}</p>
-          <p style={{ margin: '6px 0' }}><strong>Status:</strong> <Badge tone={statusTone}>{statusLabel}</Badge></p>
-          <p><strong>Expires At:</strong> {new Date(session.expiresAt).toLocaleString()}</p>
-          <p><strong>Rotations:</strong> {session.rotationCount}</p>
-          <div className="form-actions">
-            <button className="btn btn-primary" onClick={() => setConfirmAction('rotate')} disabled={!session.isActive}>Rotate Token</button>
-            {session.totpEnabled && <Link to={`/sessions/${id}/qr`} className="btn btn-success"><QrCode size={16} />View QR Display</Link>}
-            {session.isActive && !isExpired && <button className="btn btn-danger" onClick={() => setConfirmAction('deactivate')}>Deactivate Session</button>}
+      <div className="session-overview-new">
+        <div className="session-info-panel">
+          <div className="session-info-header">
+            <div className="session-info-icon-wrapper">
+              <MapPin size={18} />
+            </div>
+            <h3 className="session-info-title">SESSION INFORMATION</h3>
+          </div>
+
+          <div className="session-details-list">
+            <div className="session-detail-item">
+              <span className="detail-label">
+                <MapPin size={14} /> Location:
+              </span>
+              <span className="detail-value">{session.locationId?.name || 'Unknown'}</span>
+            </div>
+            <div className="session-detail-item">
+              <span className="detail-label">
+                <Clock size={14} /> Status:
+              </span>
+              <span className="detail-value">
+                <span className={`status-pill status-${statusTone}`}>
+                  <span className="status-dot"></span>
+                  {statusLabel}
+                </span>
+              </span>
+            </div>
+            <div className="session-detail-item">
+              <span className="detail-label">
+                <Calendar size={14} /> Expires At:
+              </span>
+              <span className="detail-value">{new Date(session.expiresAt).toLocaleString()}</span>
+            </div>
+            <div className="session-detail-item">
+              <span className="detail-label">
+                <RefreshCw size={14} /> Rotations:
+              </span>
+              <span className="detail-value">{session.rotationCount}</span>
+            </div>
+          </div>
+
+          <div className="session-actions-new">
+            <button
+              className="btn-rotate-token"
+              onClick={() => setConfirmAction('rotate')}
+              disabled={!session.isActive}
+            >
+              <RefreshCw size={14} className="rotate-icon" /> Rotate Token
+            </button>
+            {session.totpEnabled && (
+              <Link to={`/sessions/${id}/qr`} className="btn btn-qr-display">
+                <QrCode size={14} /> View QR Display
+              </Link>
+            )}
+            {session.isActive && !isExpired && (
+              <button className="btn btn-deactivate-session" onClick={() => setConfirmAction('deactivate')}>
+                Deactivate Session
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="stat-stack">
-          <StatTile label="Total Attendance" value={stats?.totalAttendance ?? 0} />
-          <StatTile label="Verified"   value={verifiedCount}   tone="success" />
-          <StatTile label="Unverified" value={unverifiedCount} tone="danger" />
+        <div className="session-panel-divider"></div>
+
+        <div className="session-stats-panel">
+          <div className="stat-card-new stat-card-total">
+            <div className="stat-card-icon-wrapper">
+              <Users size={28} />
+            </div>
+            <span className="stat-card-label">TOTAL ATTENDANCE</span>
+            <span className="stat-card-value">{stats?.totalAttendance ?? 0}</span>
+            <div className="stat-card-accent-line"></div>
+          </div>
+
+          <div className="stat-card-new stat-card-verified">
+            <div className="stat-card-icon-wrapper">
+              <ShieldCheck size={28} />
+            </div>
+            <span className="stat-card-label">VERIFIED</span>
+            <span className="stat-card-value">{verifiedCount}</span>
+            <div className="stat-card-accent-line"></div>
+          </div>
+
+          <div className="stat-card-new stat-card-unverified">
+            <div className="stat-card-icon-wrapper" style={{ position: 'relative' }}>
+              <User size={28} />
+              <div style={{ position: 'absolute', bottom: 8, right: 8, background: '#ef4444', borderRadius: '50%', padding: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #180a11' }}>
+                <AlertCircle size={12} color="#fff" />
+              </div>
+            </div>
+            <span className="stat-card-label">UNVERIFIED</span>
+            <span className="stat-card-value">{unverifiedCount}</span>
+            <div className="stat-card-accent-line"></div>
+          </div>
         </div>
       </div>
 
