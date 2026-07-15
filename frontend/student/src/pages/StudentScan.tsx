@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMobileVerification } from '../hooks/useIsMobile';
+import { useFaceDetection } from '../hooks/useFaceDetection';
 import MobileDeviceRequired from '../components/MobileDeviceRequired';
 import PermissionOnboarding from '../components/PermissionOnboarding';
 import HelpDrawer from '../components/HelpDrawer';
@@ -95,6 +96,7 @@ export default function StudentScan() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
   const { isMobile, isEmulation, inconsistencies, checking } = useMobileVerification();
+  const { ready: faceReady, detectFace } = useFaceDetection();
 
 
 
@@ -122,6 +124,7 @@ export default function StudentScan() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const photoDataRef = useRef('');
+  const faceDetectedRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const credentialRef = useRef<object | null>(null);
   const rollRef = useRef('');
@@ -542,6 +545,7 @@ export default function StudentScan() {
     if (photoTaken) {
       // Retake
       photoDataRef.current = '';
+      faceDetectedRef.current = false;
       setPhotoTaken(false);
       setUsedDevBypassCamera(false);
       if (videoRef.current && canvasRef.current) {
@@ -560,10 +564,18 @@ export default function StudentScan() {
     canvas.style.display = 'block';
     video.style.display = 'none';
     setPhotoTaken(true);
+
+    // Run real face detection
+    const hasFace = await detectFace(canvas);
+    faceDetectedRef.current = hasFace;
+    if (!hasFace) {
+      flash('No face detected — ensure your face is clearly visible before submitting.');
+    }
   };
 
   const handleDevBypassCamera = () => {
     setUsedDevBypassCamera(true);
+    faceDetectedRef.current = true;
     photoDataRef.current = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
     if (videoRef.current) videoRef.current.style.display = 'none';
     setPhotoTaken(true);
@@ -586,7 +598,7 @@ export default function StudentScan() {
         photo: photoDataRef.current,
         latitude: locData?.latitude,
         longitude: locData?.longitude,
-        faceDetected: true,
+        faceDetected: faceDetectedRef.current,
         captchaAnswer: captchaAnswer.trim(),
         captchaId,
         deviceFingerprint: fingerRef.current,
@@ -631,7 +643,11 @@ export default function StudentScan() {
           <video ref={videoRef} autoPlay playsInline muted />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
           <div className="attend-camera-guide" />
-          <span className="attend-camera-badge"><span className="dot" />{photoTaken ? 'Captured' : 'Live'}</span>
+          <span className="attend-camera-badge">
+            <span className="dot" />
+            {photoTaken ? 'Captured' : 'Live'}
+            {!faceReady && !photoTaken && ' (Loading AI...)'}
+          </span>
         </div>
         <button type="button" className={`attend-capture-btn${photoTaken ? ' retake' : ''}`} onClick={handleCapture}>
           {photoTaken ? '↺  Retake photo' : '◉  Capture photo'}

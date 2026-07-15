@@ -23,7 +23,7 @@ let hasPinoPretty = false;
 try {
   require.resolve('pino-pretty');
   hasPinoPretty = true;
-} catch (e) {
+} catch (_e) {
   // pino-pretty is not installed (e.g. Docker --omit=dev build)
 }
 

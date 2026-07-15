@@ -234,7 +234,7 @@ const exportSessionAttendance = async (req, res) => {
       { header: 'Warnings', key: 'warnings', width: 40 },
     ];
 
-    const cursor = Attendance.find({ sessionId: session._id }).cursor();
+    const cursor = Attendance.find({ sessionId: session._id, verified: true }).cursor();
 
     for await (const record of cursor) {
       worksheet.addRow({
@@ -472,6 +472,84 @@ const reviewAttendanceFlag = async (req, res) => {
   }
 };
 
+const patchAttendanceVerification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { verified } = req.body;
+
+    if (typeof verified !== 'boolean') {
+      return res.status(400).json({ message: '`verified` must be a boolean' });
+    }
+
+    // Confirm the record belongs to a session owned by this admin
+    const record = await Attendance.findById(id).populate('sessionId', 'createdBy');
+    if (!record) {
+      return res.status(404).json({ message: 'Attendance record not found' });
+    }
+    if (!record.sessionId || record.sessionId.createdBy.toString() !== req.admin._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    record.verified = verified;
+    await record.save();
+
+    res.json({ message: verified ? 'Marked verified' : 'Marked unverified', verified: record.verified });
+  } catch (error) {
+    logger.error({ err: error, attendanceId: req.params.id }, 'Error updating attendance verification status');
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const bulkPatchAttendanceVerification = async (req, res) => {
+  try {
+    const { id: sessionId } = req.params;
+    const { ids, verified } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: '`ids` must be a non-empty array' });
+    }
+    if (ids.length > 100) {
+      return res.status(400).json({ message: 'Cannot bulk-update more than 100 records at once' });
+    }
+    if (typeof verified !== 'boolean') {
+      return res.status(400).json({ message: '`verified` must be a boolean' });
+    }
+    if (!ids.every((i) => mongoose.Types.ObjectId.isValid(i))) {
+      return res.status(400).json({ message: 'One or more IDs are invalid' });
+    }
+
+    // Confirm session ownership
+    const session = await Session.findOne({ _id: sessionId, createdBy: req.admin._id });
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    // Confirm all records belong to this session
+    const records = await Attendance.find({ _id: { $in: ids }, sessionId }).select('verified');
+    if (records.length !== ids.length) {
+      return res.status(400).json({ message: 'One or more records do not belong to this session' });
+    }
+
+    // Server-side homogeneity check — prevent mixing verified + unverified
+    const statuses = new Set(records.map((r) => r.verified));
+    if (statuses.size > 1) {
+      return res.status(400).json({
+        message: 'Cannot batch-update records with mixed verification status. Select records of the same status only.',
+      });
+    }
+
+    const result = await Attendance.updateMany(
+      { _id: { $in: ids }, sessionId },
+      { $set: { verified } }
+    );
+
+    res.json({ updated: result.modifiedCount });
+  } catch (error) {
+    logger.error({ err: error, sessionId: req.params.id }, 'Error bulk updating attendance verification status');
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 const getDevicesForSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -508,4 +586,6 @@ module.exports = {
   reviewAttendanceFlag,
   getDevicesForSession,
   exportSessionAttendance,
+  patchAttendanceVerification,
+  bulkPatchAttendanceVerification,
 };

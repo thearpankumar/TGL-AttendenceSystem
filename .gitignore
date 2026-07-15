@@ -86,3 +86,7 @@ jest-results.json
 
 # Uploads (if using local storage)
 uploads/
+
+# Generated during npm install
+public/wasm/
+public/models/blaze_face_short_range.tflite

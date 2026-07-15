@@ -132,7 +132,8 @@ describe('Export Session Attendance to Excel', () => {
     expect(headers).toContain('Location');
     expect(headers).toContain('Warnings');
     
-    expect(worksheet.rowCount).toBe(3);
+    // Only verified records should be exported — Alice (verified), Bob (unverified) excluded
+    expect(worksheet.rowCount).toBe(2); // 1 header + 1 data row
     
     const row2 = worksheet.getRow(2).values.slice(1);
     expect(row2[0]).toBe('A001'); 
@@ -140,11 +141,45 @@ describe('Export Session Attendance to Excel', () => {
     expect(row2[2]).toBe('Export Location');
     expect(row2[4]).toBe('Verified');
     
-    const row3 = worksheet.getRow(3).values.slice(1);
-    expect(row3[0]).toBe('B002');
-    expect(row3[1]).toBe('Bob'); 
-    expect(row3[2]).toBe('Export Location');
-    expect(row3[4]).toBe('Flagged');
-    expect(row3[7]).toBe('MULTI_STUDENT_DEVICE');
+    // Bob (unverified) must NOT appear in the export
+    const allRollNumbers = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) allRollNumbers.push(row.getCell(1).value);
+    });
+    expect(allRollNumbers).not.toContain('B002');
+  });
+
+  test('should export empty sheet when no verified records exist', async () => {
+    // Only unverified record — nothing should be in the data rows
+    await Attendance.create({
+      sessionId: session._id,
+      studentName: 'Charlie',
+      rollNumber: 'C003',
+      distanceFromLocation: 800,
+      studentLatitude: 13.0,
+      studentLongitude: 78.0,
+      photoUrl: 'https://example.com/photo.jpg',
+      photoPublicId: 'photo3',
+      capturedAt: new Date(),
+      verified: false
+    });
+
+    const res = await request(app)
+      .get(`/api/admin/sessions/${session._id}/export`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        let data = Buffer.from('');
+        r.on('data', chunk => data = Buffer.concat([data, chunk]));
+        r.on('end', () => cb(null, data));
+      })
+      .expect(200);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(res.body);
+    const worksheet = workbook.getWorksheet('Attendance');
+    // Only header row — no data rows
+    expect(worksheet.rowCount).toBe(1);
   });
 });
+

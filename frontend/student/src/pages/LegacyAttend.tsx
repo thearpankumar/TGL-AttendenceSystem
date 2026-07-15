@@ -2,13 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMobileVerification } from '../hooks/useIsMobile';
 import MobileDeviceRequired from '../components/MobileDeviceRequired';
-
-/* ponytail: face-api.js loaded via CDN in index.html */
-declare const faceapi: {
-  nets: { ssdMobilenetv1: { loadFromUri(uri: string): Promise<void> } };
-  SsdMobilenetv1Options: new (opts: { minConfidence: number }) => unknown;
-  detectAllFaces(input: HTMLCanvasElement, opts: unknown): Promise<unknown[]>;
-};
+import { useFaceDetection } from '../hooks/useFaceDetection';
 
 interface SessionInfo { locationName: string; expiresAt: string; }
 interface StorageInfo { provider: string; supportsDirectUpload?: boolean; }
@@ -21,14 +15,6 @@ const GEO_ERRORS: Record<number, { title: string; detail: string }> = {
   3: { title: '⚠ Location Timeout', detail: 'Location request timed out. Check GPS is enabled and retry.' },
 };
 
-let faceModelLoaded = false;
-const loadFaceModel = async () => {
-  if (faceModelLoaded || typeof faceapi === 'undefined') return;
-  await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
-  faceModelLoaded = true;
-};
-loadFaceModel().catch(() => {});
-
 export default function LegacyAttend() {
   const { shortCode } = useParams<{ shortCode: string }>();
   const API = window.location.origin;
@@ -39,6 +25,7 @@ export default function LegacyAttend() {
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
   const { isMobile, isEmulation, inconsistencies, checking } = useMobileVerification();
+  const { ready: faceReady, detectFace } = useFaceDetection();
 
   const [name, setName] = useState('');
   const [roll, setRoll] = useState('');
@@ -207,17 +194,10 @@ export default function LegacyAttend() {
     setPhotoTaken(true);
 
     // Face detection
-    faceDetectedRef.current = true;
-    if (typeof faceapi !== 'undefined') {
-      try {
-        if (!faceModelLoaded) await loadFaceModel();
-        const detections = await faceapi.detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
-        faceDetectedRef.current = detections.length > 0;
-        if (!faceDetectedRef.current) flash("Face not detected. Make sure your face is clearly visible before submitting.");
-      } catch { faceDetectedRef.current = false; }
-    } else {
-      faceDetectedRef.current = false;
-      flash("Face verification engine not ready. Attendance will be flagged.");
+    const hasFace = await detectFace(canvas);
+    faceDetectedRef.current = hasFace;
+    if (!hasFace) {
+      flash('No face detected — ensure your face is clearly visible before submitting.');
     }
   };
 
@@ -335,7 +315,11 @@ export default function LegacyAttend() {
                 <video ref={videoRef} autoPlay playsInline muted />
                 <canvas ref={canvasRef} style={{ display: 'none' }} />
                 <div className="attend-camera-guide" />
-                <span className="attend-camera-badge"><span className="dot" />{photoTaken ? 'Captured' : 'Live'}</span>
+                <span className="attend-camera-badge">
+                  <span className="dot" />
+                  {photoTaken ? 'Captured' : 'Live'}
+                  {!faceReady && !photoTaken && ' (Loading AI...)'}
+                </span>
               </div>
               <button type="button" className={`attend-capture-btn${photoTaken ? ' retake' : ''}`} onClick={handleCapture}>
                 {photoTaken ? '↺  Retake photo' : '◉  Capture photo'}

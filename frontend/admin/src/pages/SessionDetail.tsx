@@ -1,12 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { QrCode } from 'lucide-react';
+import { QrCode, CheckCircle, XCircle, X } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import StatTile from '../components/ui/StatTile';
-import DataTable from '../components/ui/DataTable';
-import type { Column } from '../components/ui/DataTable';
 import Badge from '../components/ui/Badge';
 import ConfirmModal from '../components/ui/ConfirmModal';
 import { SkeletonTiles, SkeletonRows } from '../components/ui/Skeleton';
@@ -37,6 +35,8 @@ interface AttendanceRecord {
 
 interface Stats { totalAttendance: number; verifiedAttendance: number; }
 
+type ActiveTab = 'all' | 'verified' | 'unverified';
+
 const parseUA = (ua?: string) => {
   if (!ua) return 'N/A';
   const lower = ua.toLowerCase();
@@ -57,6 +57,8 @@ const parseUA = (ua?: string) => {
 
 const SessionDetail = () => {
   const { id } = useParams<{ id: string }>();
+
+  // Core data
   const [session, setSession] = useState<Session | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -64,6 +66,31 @@ const SessionDetail = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'rotate' | 'deactivate' | null>(null);
 
+  // ── Verification state ──────────────────────────────────
+  // Tab filter
+  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState<'verified' | 'unverified' | null>(null);
+  // Kebab menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Single-record loading
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  // Undo timer ref (delayed API call)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Derived counts for tabs ─────────────────────────────
+  const verifiedCount   = useMemo(() => attendance.filter(a => a.verified).length,  [attendance]);
+  const unverifiedCount = useMemo(() => attendance.filter(a => !a.verified).length, [attendance]);
+
+  // ── Filtered rows for table ─────────────────────────────
+  const filteredAttendance = useMemo(() => {
+    if (activeTab === 'all')        return attendance;
+    if (activeTab === 'verified')   return attendance.filter(a => a.verified);
+    return attendance.filter(a => !a.verified);
+  }, [attendance, activeTab]);
+
+  // ── Fetch ───────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
       const [sessionRes, attendanceRes, statsRes] = await Promise.all([
@@ -78,8 +105,23 @@ const SessionDetail = () => {
     finally { setLoading(false); }
   }, [id]);
 
-  useEffect(() => { fetchData(); const interval = setInterval(fetchData, 30000); return () => clearInterval(interval); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
+  // ── Close kebab on outside click ────────────────────────
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('.kebab-cell')) setOpenMenuId(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openMenuId]);
+
+  // ── Session actions ─────────────────────────────────────
   const handleRotateToken = async () => {
     try {
       const res = await axios.post<{ token: string }>(`/api/admin/sessions/${id}/rotate`);
@@ -99,7 +141,7 @@ const SessionDetail = () => {
   };
 
   const handleExportExcel = async () => {
-    if (!attendance.length) { toast.error('No attendance data to export'); return; }
+    if (!verifiedCount) { toast.error('No verified records to export'); return; }
     setIsExporting(true);
     try {
       const res = await axios.get(`/api/admin/sessions/${id}/export`, { responseType: 'blob' });
@@ -109,18 +151,184 @@ const SessionDetail = () => {
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       const sessionName = session?.description || session?.locationId?.name || 'Session';
       const safeSessionName = sessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
-      
-      a.href = url; 
-      a.download = `TGL-attendix-${safeSessionName}-time${timeStr}.xlsx`;
-      a.click(); 
+      a.href = url;
+      a.download = `TGL-attendix-${safeSessionName}-verified-time${timeStr}.xlsx`;
+      a.click();
       URL.revokeObjectURL(url);
-      toast.success('Export downloaded successfully!');
-    } catch (_err) {
-      toast.error('Failed to export attendance');
-    } finally {
-      setIsExporting(false);
+      toast.success('Verified attendance exported!');
+    } catch { toast.error('Failed to export attendance'); }
+    finally { setIsExporting(false); }
+  };
+
+  // ── Tab change ──────────────────────────────────────────
+  const handleTabChange = (tab: ActiveTab) => {
+    if (selectedIds.size > 0) return; // lock tabs while selection is active
+    setActiveTab(tab);
+  };
+
+  // ── Checkbox selection ──────────────────────────────────
+  const handleRowCheck = (record: AttendanceRecord, checked: boolean) => {
+    const recordStatus = record.verified ? 'verified' : 'unverified';
+
+    // Enforce homogeneous selection
+    if (checked && selectionMode && selectionMode !== recordStatus) return;
+
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(record._id);
+      } else {
+        next.delete(record._id);
+      }
+      return next;
+    });
+
+    if (checked) {
+      setSelectionMode(recordStatus as 'verified' | 'unverified');
+    } else {
+      // Release lock if nothing remains selected
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(record._id);
+        if (next.size === 0) setSelectionMode(null);
+        return next;
+      });
     }
   };
+
+  const handleSelectAll = () => {
+    const eligible = filteredAttendance.filter(a =>
+      !selectionMode || (selectionMode === 'verified' ? a.verified : !a.verified)
+    );
+    const allSelected = eligible.every(a => selectedIds.has(a._id));
+
+    if (allSelected) {
+      // Deselect all eligible
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        eligible.forEach(a => next.delete(a._id));
+        if (next.size === 0) setSelectionMode(null);
+        return next;
+      });
+    } else {
+      // Select all eligible
+      const firstStatus = filteredAttendance.find(a => !selectionMode || (selectionMode === 'verified' ? a.verified : !a.verified));
+      if (!firstStatus) return;
+      const mode = firstStatus.verified ? 'verified' : 'unverified';
+      setSelectionMode(mode);
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredAttendance
+          .filter(a => (mode === 'verified' ? a.verified : !a.verified))
+          .forEach(a => next.add(a._id));
+        return next;
+      });
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(null);
+  };
+
+  // ── Single record toggle ────────────────────────────────
+  const handleSingleVerify = async (record: AttendanceRecord, newVerified: boolean) => {
+    setOpenMenuId(null);
+    setTogglingId(record._id);
+    // Optimistic update
+    setAttendance(prev => prev.map(a => a._id === record._id ? { ...a, verified: newVerified } : a));
+    try {
+      await axios.patch(`/api/admin/attendance/${record._id}/verify`, { verified: newVerified });
+      toast.success(newVerified ? `${record.studentName} marked verified` : `${record.studentName} marked unverified`);
+    } catch {
+      // Roll back
+      setAttendance(prev => prev.map(a => a._id === record._id ? { ...a, verified: record.verified } : a));
+      toast.error('Failed to update verification status');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // ── Bulk verify with undo ───────────────────────────────
+  const handleBulkVerify = (newVerified: boolean) => {
+    if (!selectedIds.size) return;
+
+    const ids = Array.from(selectedIds);
+    const count = ids.length;
+    const label = newVerified ? 'verified' : 'unverified';
+
+    // Snapshot for rollback
+    const snapshot = [...attendance];
+
+    // Cancel any pending undo timer
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      toast.dismiss('bulk-verify-undo');
+    }
+
+    // Optimistic update
+    setAttendance(prev => prev.map(a => selectedIds.has(a._id) ? { ...a, verified: newVerified } : a));
+    clearSelection();
+
+    // Delayed API call — 5 second undo window
+    const timer = setTimeout(async () => {
+      try {
+        await axios.post(`/api/admin/sessions/${id}/attendance/bulk-verify`, { ids, verified: newVerified });
+        toast.dismiss('bulk-verify-undo');
+      } catch {
+        setAttendance(snapshot);
+        toast.error(`Failed to mark ${count} records as ${label}`);
+        toast.dismiss('bulk-verify-undo');
+      }
+    }, 5000);
+
+    undoTimerRef.current = timer;
+
+    // Show undo toast
+    toast(
+      ({ closeToast }) => (
+        <div className="undo-toast-body">
+          <span className="undo-toast-msg">
+            {count} {count === 1 ? 'record' : 'records'} marked {label}
+          </span>
+          <button
+            className="undo-btn"
+            onClick={() => {
+              clearTimeout(timer);
+              undoTimerRef.current = null;
+              setAttendance(snapshot);
+              closeToast?.();
+              toast.dismiss('bulk-verify-undo');
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      ),
+      { toastId: 'bulk-verify-undo', autoClose: 5000, closeButton: false }
+    );
+  };
+
+  // ── Cleanup undo timer on unmount ───────────────────────
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  // ── Header checkbox state ───────────────────────────────
+  const eligibleRows = useMemo(() => {
+    return filteredAttendance.filter(a =>
+      !selectionMode || (selectionMode === 'verified' ? a.verified : !a.verified)
+    );
+  }, [filteredAttendance, selectionMode]);
+
+  const allEligibleSelected = eligibleRows.length > 0 && eligibleRows.every(a => selectedIds.has(a._id));
+  const someEligibleSelected = eligibleRows.some(a => selectedIds.has(a._id)) && !allEligibleSelected;
+
+  // ── IP duplicate detection ──────────────────────────────
+  const ipCounts: Record<string, number> = {};
+  attendance.forEach((a) => { if (a.ipAddress) ipCounts[a.ipAddress] = (ipCounts[a.ipAddress] || 0) + 1; });
 
   if (loading) return <div className="container"><SkeletonTiles count={3} /><SkeletonRows /></div>;
   if (!session) return <div className="container"><p>Session not found</p><Link to="/sessions" className="btn btn-secondary">Back to Sessions</Link></div>;
@@ -128,34 +336,6 @@ const SessionDetail = () => {
   const isExpired = new Date(session.expiresAt) < new Date();
   const statusTone = !session.isActive ? 'danger' : isExpired ? 'warning' : 'success';
   const statusLabel = !session.isActive ? 'Inactive' : isExpired ? 'Expired' : 'Active';
-
-  const ipCounts: Record<string, number> = {};
-  attendance.forEach((a) => { if (a.ipAddress) ipCounts[a.ipAddress] = (ipCounts[a.ipAddress] || 0) + 1; });
-
-  const columns: Column<AttendanceRecord>[] = [
-    { key: 'rollNumber', label: 'Roll No.', width: '90px', render: (a) => a.rollNumber },
-    { key: 'name', label: 'Name', width: '180px', render: (a) => (
-      <span
-        title={a.studentName}
-        style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-      >
-        {a.studentName}
-      </span>
-    )},
-    { key: 'photo', label: 'Photo', width: '64px', render: (a) => <img src={a.photoUrl} alt="Student" style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }} /> },
-    { key: 'distance', label: 'Distance', width: '90px', render: (a) => <span style={{ whiteSpace: 'nowrap' }}>{a.distanceFromLocation}m</span> },
-    { key: 'time', label: 'Time', width: '100px', render: (a) => <span style={{ whiteSpace: 'nowrap' }}>{new Date(a.capturedAt).toLocaleTimeString()}</span> },
-    { key: 'status', label: 'Status', width: '110px', render: (a) => <Badge tone={a.verified ? 'success' : 'danger'}>{a.verified ? 'Verified' : 'Unverified'}</Badge> },
-    { key: 'ip', label: 'IP Address', width: '160px', render: (a) => (
-      <div>
-        <div style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{a.ipAddress || 'N/A'}</div>
-        {a.networkProvider && <div style={{ fontSize: '11px', color: 'var(--color-muted)', marginTop: '2px', whiteSpace: 'nowrap' }}>{a.networkProvider}</div>}
-        {a.ipAddress && ipCounts[a.ipAddress] > 1 && <Badge tone="danger">Shared ({ipCounts[a.ipAddress]})</Badge>}
-      </div>
-    )},
-    { key: 'device', label: 'Device', width: '140px', render: (a) => <span title={a.userAgent}>{parseUA(a.userAgent)}</span> },
-    { key: 'face', label: 'Face Check', width: '110px', render: (a) => <Badge tone={a.faceDetected !== false ? 'success' : 'danger'}>{a.faceDetected !== false ? 'Detected' : 'No Face'}</Badge> },
-  ];
 
   return (
     <div className="container">
@@ -165,6 +345,7 @@ const SessionDetail = () => {
 
       <PageHeader title="Session Details" />
 
+      {/* ── Session overview ───────────────────────────── */}
       <div className="session-overview">
         <div className="card">
           <h3 style={{ marginBottom: 'var(--space-3)' }}>Session Info</h3>
@@ -181,22 +362,255 @@ const SessionDetail = () => {
 
         <div className="stat-stack">
           <StatTile label="Total Attendance" value={stats?.totalAttendance ?? 0} />
-          <StatTile label="Verified"   value={stats?.verifiedAttendance ?? 0} tone="success" />
-          <StatTile label="Unverified" value={(stats?.totalAttendance ?? 0) - (stats?.verifiedAttendance ?? 0)} tone="danger" />
+          <StatTile label="Verified"   value={verifiedCount}   tone="success" />
+          <StatTile label="Unverified" value={unverifiedCount} tone="danger" />
         </div>
       </div>
 
+      {/* ── Attendance table card ──────────────────────── */}
       <div className="card card-table">
+
+        {/* Header row: title + export */}
         <div className="row" style={{ padding: 'var(--space-5) var(--space-6) 0' }}>
           <h3>Attendance Records</h3>
-          <button className="btn btn-secondary btn-small" onClick={handleExportExcel} disabled={isExporting}>
-            {isExporting ? 'Exporting...' : 'Export to Excel'}
+          <button
+            id="export-verified-btn"
+            className="btn btn-secondary btn-small"
+            onClick={handleExportExcel}
+            disabled={isExporting || !verifiedCount}
+            title={!verifiedCount ? 'No verified records to export' : undefined}
+          >
+            {isExporting ? 'Exporting…' : `Export Verified${verifiedCount ? ` (${verifiedCount})` : ''}`}
           </button>
         </div>
-        {attendance.length === 0 ? (
-          <p style={{ padding: 'var(--space-6)' }}>No attendance records yet</p>
+
+        {/* ── Bulk action bar (appears on selection) ───── */}
+        {selectedIds.size > 0 && (
+          <div style={{ padding: 'var(--space-3) var(--space-6) 0' }}>
+            <div className="bulk-action-bar" id="bulk-action-bar">
+              <div className="bulk-info">
+                <strong>{selectedIds.size}</strong>
+                <span>
+                  {selectedIds.size === 1 ? 'record' : 'records'} selected
+                  {selectionMode && <> ({selectionMode})</>}
+                </span>
+              </div>
+              <div className="bulk-bar-actions">
+                {selectionMode === 'unverified' && (
+                  <button
+                    id="bulk-mark-verified-btn"
+                    className="btn btn-small btn-verify"
+                    onClick={() => handleBulkVerify(true)}
+                  >
+                    <CheckCircle size={14} />
+                    Mark All Verified
+                  </button>
+                )}
+                {selectionMode === 'verified' && (
+                  <button
+                    id="bulk-mark-unverified-btn"
+                    className="btn btn-small btn-unverify"
+                    onClick={() => handleBulkVerify(false)}
+                  >
+                    <XCircle size={14} />
+                    Mark All Unverified
+                  </button>
+                )}
+                <button
+                  id="clear-selection-btn"
+                  className="btn btn-small btn-clear-sel"
+                  onClick={clearSelection}
+                >
+                  <X size={12} /> Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab filter row ────────────────────────────── */}
+        <div className="row" style={{ padding: 'var(--space-4) var(--space-6) 0' }}>
+          <div
+            className="status-tabs"
+            title={selectedIds.size > 0 ? 'Clear selection before switching tabs' : undefined}
+          >
+            {(['all', 'verified', 'unverified'] as ActiveTab[]).map(tab => (
+              <button
+                key={tab}
+                id={`tab-${tab}`}
+                className={`status-tab tab-${tab}${activeTab === tab ? ' active' : ''}`}
+                onClick={() => handleTabChange(tab)}
+                disabled={selectedIds.size > 0}
+                style={selectedIds.size > 0 ? { cursor: 'not-allowed', opacity: .5 } : undefined}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                <span className="tab-count">
+                  {tab === 'all' ? attendance.length : tab === 'verified' ? verifiedCount : unverifiedCount}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Table ─────────────────────────────────────── */}
+        {filteredAttendance.length === 0 ? (
+          <p style={{ padding: 'var(--space-6)' }}>
+            {attendance.length === 0 ? 'No attendance records yet' : `No ${activeTab} records`}
+          </p>
         ) : (
-          <DataTable columns={columns} rows={attendance} rowKey={(a) => a._id} />
+          <div className="table-scroll" style={{ marginTop: 'var(--space-4)' }}>
+            <table className="table" style={{ minWidth: 720 }}>
+              <colgroup>
+                <col style={{ width: '44px' }} />
+                <col style={{ width: '80px' }} />
+                <col style={{ width: '170px' }} />
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '80px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '150px' }} />
+                <col style={{ width: '130px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '36px' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {/* Select-all checkbox */}
+                  <th className="col-check">
+                    <input
+                      type="checkbox"
+                      id="select-all-checkbox"
+                      className="header-checkbox"
+                      checked={allEligibleSelected}
+                      ref={el => { if (el) el.indeterminate = someEligibleSelected; }}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
+                  <th style={{ textAlign: 'left' }}>Roll No.</th>
+                  <th style={{ textAlign: 'left' }}>Name</th>
+                  <th style={{ textAlign: 'center' }}>Photo</th>
+                  <th style={{ textAlign: 'left' }}>Distance</th>
+                  <th style={{ textAlign: 'left' }}>Time</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th style={{ textAlign: 'left' }}>IP Address</th>
+                  <th style={{ textAlign: 'left' }}>Device</th>
+                  <th style={{ textAlign: 'center' }}>Face Check</th>
+                  <th className="kebab-cell" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAttendance.map(record => {
+                  const isSelected = selectedIds.has(record._id);
+                  const recordStatus = record.verified ? 'verified' : 'unverified';
+                  const isDisabled = !!(selectionMode && selectionMode !== recordStatus);
+                  const isToggling = togglingId === record._id;
+                  const isMenuOpen = openMenuId === record._id;
+
+                  return (
+                    <tr
+                      key={record._id}
+                      style={isSelected ? { background: 'var(--color-primary-light)' } : undefined}
+                    >
+                      {/* Checkbox */}
+                      <td className="col-check">
+                        <div
+                          className="checkbox-wrapper"
+                          data-disabled={isDisabled ? 'true' : undefined}
+                          data-tip="Select same-status records only"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`check-${record._id}`}
+                            className="row-checkbox"
+                            checked={isSelected}
+                            disabled={isDisabled}
+                            onChange={e => handleRowCheck(record, e.target.checked)}
+                          />
+                        </div>
+                      </td>
+
+                      <td style={{ fontWeight: 500 }}>{record.rollNumber}</td>
+
+                      <td>
+                        <span title={record.studentName} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {record.studentName}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <img src={record.photoUrl} alt="Student" style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }} />
+                      </td>
+
+                      <td><span style={{ whiteSpace: 'nowrap' }}>{record.distanceFromLocation}m</span></td>
+
+                      <td><span style={{ whiteSpace: 'nowrap' }}>{new Date(record.capturedAt).toLocaleTimeString()}</span></td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <Badge tone={record.verified ? 'success' : 'danger'}>
+                          {record.verified ? 'Verified' : 'Unverified'}
+                        </Badge>
+                      </td>
+
+                      <td>
+                        <div>
+                          <div style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{record.ipAddress || 'N/A'}</div>
+                          {record.networkProvider && <div style={{ fontSize: '11px', color: 'var(--color-muted)', marginTop: '2px', whiteSpace: 'nowrap' }}>{record.networkProvider}</div>}
+                          {record.ipAddress && ipCounts[record.ipAddress] > 1 && <Badge tone="danger">Shared ({ipCounts[record.ipAddress]})</Badge>}
+                        </div>
+                      </td>
+
+                      <td><span title={record.userAgent}>{parseUA(record.userAgent)}</span></td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <Badge tone={record.faceDetected !== false ? 'success' : 'danger'}>
+                          {record.faceDetected !== false ? 'Detected' : 'No Face'}
+                        </Badge>
+                      </td>
+
+                      {/* ⋮ Kebab menu */}
+                      <td className="kebab-cell">
+                        <button
+                          id={`kebab-btn-${record._id}`}
+                          className={`kebab-btn${isMenuOpen ? ' open' : ''}`}
+                          aria-label="Actions"
+                          disabled={isToggling}
+                          onClick={() => setOpenMenuId(isMenuOpen ? null : record._id)}
+                        >
+                          ⋮
+                        </button>
+
+                        {isMenuOpen && (
+                          <div className="kebab-dropdown" role="menu">
+                            {!record.verified ? (
+                              <button
+                                id={`mark-verified-${record._id}`}
+                                className="kebab-item verify-action"
+                                role="menuitem"
+                                onClick={() => handleSingleVerify(record, true)}
+                              >
+                                <CheckCircle size={14} />
+                                Mark as Verified
+                              </button>
+                            ) : (
+                              <button
+                                id={`mark-unverified-${record._id}`}
+                                className="kebab-item unverify-action"
+                                role="menuitem"
+                                onClick={() => handleSingleVerify(record, false)}
+                              >
+                                <XCircle size={14} />
+                                Mark as Unverified
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

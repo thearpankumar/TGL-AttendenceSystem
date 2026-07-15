@@ -46,6 +46,8 @@ router.get('/sessions/:id/export', sessionController.exportSessionAttendance);
 
 router.get('/flagged', sessionController.getFlaggedAttendance);
 router.patch('/attendance/:id/review', sessionController.reviewAttendanceFlag);
+router.patch('/attendance/:id/verify', sessionController.patchAttendanceVerification);
+router.post('/sessions/:id/attendance/bulk-verify', sessionController.bulkPatchAttendanceVerification);
 
 router.post('/shortlinks', shortLinkController.createShortLink);
 router.get('/shortlinks', shortLinkController.getShortLinks);

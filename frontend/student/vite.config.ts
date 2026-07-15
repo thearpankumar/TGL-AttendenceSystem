@@ -13,4 +13,8 @@ export default defineConfig({
     },
   },
   build: { outDir: 'dist', assetsDir: 'attend-assets' },
+  assetsInclude: ['**/*.tflite'],
+  optimizeDeps: {
+    exclude: ['@mediapipe/tasks-vision'],
+  },
 });
