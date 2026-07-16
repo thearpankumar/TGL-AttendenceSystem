@@ -6,6 +6,7 @@ const Batch = require('../models/Batch');
 const Location = require('../models/Location');
 const { generateToken } = require('../middleware/auth');
 const config = require('../config');
+const logger = require('../utils/logger').child({ module: 'admin' });
 
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -166,10 +167,13 @@ const getTimeframeRange = (timeframe) => {
 };
 
 const getDashboardStats = async (req, res) => {
+  const startTime = Date.now();
+  const adminId = req.admin._id;
+  const { batchId, locationId, timeframe, riskLevel } = req.query;
+  
+  logger.info({ adminId, filters: { batchId, locationId, timeframe, riskLevel } }, 'Dashboard stats requested');
+  
   try {
-    const adminId = req.admin._id;
-    const { batchId, locationId, timeframe, riskLevel } = req.query;
-    
     // Parse timeframe filter
     const timeframeRange = getTimeframeRange(timeframe);
 
@@ -194,16 +198,39 @@ const getDashboardStats = async (req, res) => {
 
     // If no sessions exist, return a default zeroed payload
     if (sessionIds.length === 0) {
+      // Get system integrity score even for empty dashboard
+      const { getSystemIntegrityScore } = require('../services/systemHealth');
+      let systemHealth;
+      try {
+        systemHealth = await getSystemIntegrityScore();
+      } catch {
+        systemHealth = { score: 0, status: 'At Risk', components: null };
+      }
+
       return res.json({
         pulse: {
           eligibility: { value: 0, target: 90, delta: 0, deltaType: 'up', status: 'On Track' },
-          integrity: { value: 0, target: 95, delta: 0, deltaType: 'down', status: 'At Risk' },
+          integrity: { 
+            value: systemHealth.score, 
+            target: 100, 
+            delta: 0, 
+            deltaType: 'right', 
+            status: systemHealth.status,
+            components: systemHealth.components
+          },
           turnout: { value: 0, target: 85, delta: 0, deltaType: 'down', status: 'At Risk' },
           quarantine: { count: 0, status: 'On Track' }
         },
         charts: {
           funnel: { total: 0, onTrack: { count: 0, percentage: 0 }, atRisk: { count: 0, percentage: 0 }, disqualified: { count: 0, percentage: 0 } },
           integrityBreakdown: { totalCheckins: 0, flaggedAnomalies: 0, score: 0, flags: { gpsViolations: { count: 0, percentage: 0 }, deviceAnomalies: { count: 0, percentage: 0 } } },
+          systemHealth: {
+            score: systemHealth.score,
+            status: systemHealth.status,
+            healthStatus: systemHealth.healthStatus,
+            components: systemHealth.components,
+            summary: systemHealth.summary
+          },
           weeklyTrends: []
         },
         worklists: { rescueList: [], quarantineList: [], lowBatches: [] },
@@ -394,10 +421,26 @@ const getDashboardStats = async (req, res) => {
     // Sort low engagement batches by attendance (lowest first)
     lowBatches.sort((a, b) => a.attendance - b.attendance);
 
+    // Get system integrity score from health service
+    const { getSystemIntegrityScore } = require('../services/systemHealth');
+    let systemHealth;
+    try {
+      systemHealth = await getSystemIntegrityScore();
+    } catch (_healthError) {
+      systemHealth = { score: 0, status: 'At Risk', components: null };
+    }
+
     res.json({
       pulse: {
         eligibility: { value: avgEligibility, target: 90, delta: 2, deltaType: 'up', status: avgEligibility >= 85 ? 'On Track' : 'At Risk' },
-        integrity: { value: integrityScore, target: 95, delta: 1, deltaType: 'up', status: integrityScore >= 95 ? 'On Track' : 'At Risk' },
+        integrity: { 
+          value: systemHealth.score, 
+          target: 100, 
+          delta: 0, 
+          deltaType: 'right', 
+          status: systemHealth.status,
+          components: systemHealth.components
+        },
         turnout: { value: weeklyTrends.length > 0 ? weeklyTrends[weeklyTrends.length-1].rate : 0, target: 85, delta: 0, deltaType: 'right', status: 'On Track' },
         quarantine: { count: quarantineCount, status: quarantineCount > 0 ? 'Critical' : 'On Track' }
       },
@@ -417,6 +460,13 @@ const getDashboardStats = async (req, res) => {
             deviceAnomalies: { count: deviceFlagsCount, percentage: totalCheckins > 0 ? Math.round((deviceFlagsCount/totalCheckins)*100) : 0 }
           }
         },
+        systemHealth: {
+          score: systemHealth.score,
+          status: systemHealth.status,
+          healthStatus: systemHealth.healthStatus,
+          components: systemHealth.components,
+          summary: systemHealth.summary
+        },
         weeklyTrends: weeklyTrends.length > 0 ? weeklyTrends : [{ date: 'Today', day: 'Today', rate: 0 }]
       },
       worklists: { 
@@ -429,7 +479,15 @@ const getDashboardStats = async (req, res) => {
       },
       lastUpdated: new Date().toISOString()
     });
+    
+    logger.info({ 
+      adminId, 
+      duration: Date.now() - startTime,
+      sessionsCount: sessionIds.length,
+      integrityScore: systemHealth.score
+    }, 'Dashboard stats response sent');
   } catch (error) {
+    logger.error({ err: error, adminId }, 'Error fetching dashboard stats');
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -552,9 +610,12 @@ const getSessionsByDate = async (req, res) => {
 };
 
 const getDashboardFilters = async (req, res) => {
+  const startTime = Date.now();
+  const adminId = req.admin._id;
+  
+  logger.debug({ adminId }, 'Dashboard filters requested');
+  
   try {
-    const adminId = req.admin._id;
-
     const batches = await Batch.find({ createdBy: adminId })
       .select('name')
       .sort({ name: 1 });
@@ -604,8 +665,41 @@ const getDashboardFilters = async (req, res) => {
       timeframes,
       riskLevels,
     });
+    
+    logger.debug({ 
+      adminId, 
+      duration: Date.now() - startTime,
+      batchCount: batches.length,
+      centerCount: locations.length 
+    }, 'Dashboard filters response sent');
   } catch (error) {
+    logger.error({ err: error, adminId }, 'Error fetching dashboard filters');
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getSystemHealth = async (req, res) => {
+  const startTime = Date.now();
+  logger.debug('System health requested');
+  
+  try {
+    const { getSystemIntegrityScore } = require('../services/systemHealth');
+    const healthData = await getSystemIntegrityScore();
+    
+    logger.info({ 
+      score: healthData.score, 
+      status: healthData.status,
+      duration: Date.now() - startTime,
+      healthyComponents: healthData.summary?.healthyComponents 
+    }, 'System health check completed');
+    
+    res.json(healthData);
+  } catch (error) {
+    logger.error({ err: error }, 'Error fetching system health');
+    res.status(500).json({ 
+      message: 'Failed to retrieve system health', 
+      error: error.message 
+    });
   }
 };
 
@@ -618,4 +712,5 @@ module.exports = {
   getAttendanceSeries,
   getSessionsByDate,
   getDashboardFilters,
+  getSystemHealth,
 };

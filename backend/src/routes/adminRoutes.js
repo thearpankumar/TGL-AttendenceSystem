@@ -33,6 +33,7 @@ router.get('/dashboard/filters', adminController.getDashboardFilters);
 router.get('/dashboard/recent-activity', adminController.getRecentActivity);
 router.get('/dashboard/attendance-series', adminController.getAttendanceSeries);
 router.get('/dashboard/sessions-by-date', adminController.getSessionsByDate);
+router.get('/system-health', adminController.getSystemHealth);
 
 router.post('/locations', validateLocation, locationController.createLocation);
 router.get('/locations', locationController.getLocations);

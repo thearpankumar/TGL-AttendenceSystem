@@ -84,6 +84,9 @@ vi.mock('react-toastify', () => {
   };
 });
 
+const originalError = console.error;
+const originalWarn = console.warn;
+
 global.console = {
   ...console,
   error: vi.fn((...args) => {
@@ -96,7 +99,7 @@ global.console = {
     ) {
       return;
     }
-    console.warn(...args);
+    originalWarn.call(console, ...args);
   }),
   warn: vi.fn((...args) => {
     const msg = args[0];
@@ -106,6 +109,6 @@ global.console = {
     ) {
       return;
     }
-    console.warn(...args);
+    originalWarn.call(console, ...args);
   }),
 };

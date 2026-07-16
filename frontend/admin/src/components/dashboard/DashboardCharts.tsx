@@ -120,7 +120,6 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ charts, loading }) =>
   const { ticks: integrityTicks, max: maxIntegrity } = generateDynamicTicks(totalCheckins);
   const leftBarHeightPercent = (totalCheckins / maxIntegrity) * 100;
   const rightBarHeightPercent = (rightTotal / maxIntegrity) * 100;
-  const rightBarDisplayHeight = Math.max(30, rightBarHeightPercent); // Ensure visual thickness to prevent label clipping
 
   // Math for Weekly Engagement Trends (Line Chart)
   const weeklyTrends = charts.weeklyTrends || [];
@@ -399,30 +398,30 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ charts, loading }) =>
             <div className="absolute left-0 right-0 top-[70%] border-t border-slate-200 dark:border-white/[0.03] pointer-events-none" />
 
             {/* Bar 1: Total Check-ins */}
-            <div className="flex flex-col items-center w-28">
+            <div className="flex flex-col justify-end items-center w-28 h-full relative">
               <div
-                className="w-14 rounded-t-md relative flex items-start justify-center group"
+                className="w-14 rounded-t-md relative flex items-start justify-center group transition-all duration-500"
                 style={{
-                  height: `${Math.max(6, leftBarHeightPercent)}%`,
+                  height: `${Math.max(1, leftBarHeightPercent)}%`,
                   background: 'linear-gradient(180deg, #12b76a 0%, rgba(18, 183, 106, 0.4) 100%)',
                   boxShadow: '0 0 12px rgba(18, 183, 106, 0.15)',
                 }}
               >
-                <span className="absolute -top-5 text-slate-900 dark:text-white text-[10px] font-black tracking-tight bg-slate-100 dark:bg-slate-950/40 px-1 rounded">
+                <span className="absolute -top-5 text-slate-900 dark:text-white text-[10px] font-black tracking-tight bg-slate-100 dark:bg-slate-950/40 px-1 rounded shadow-sm">
                   {totalCheckins.toLocaleString()}
                 </span>
               </div>
-              <span className="text-slate-500 dark:text-[#8b90b8] text-[9px] font-bold mt-2 whitespace-nowrap text-center">
+              <span className="absolute top-full mt-2 text-slate-500 dark:text-[#8b90b8] text-[9px] font-bold whitespace-nowrap text-center">
                 Total Check-ins
               </span>
             </div>
 
             {/* Bar 2: Flagged Anomalies */}
-            <div className="flex flex-col items-center w-28">
+            <div className="flex flex-col justify-end items-center w-28 h-full relative">
               <div
-                className="w-14 rounded-t-md relative flex flex-col justify-end overflow-hidden"
+                className="w-14 rounded-t-md relative flex flex-col justify-end overflow-hidden shadow-[0_0_8px_rgba(240,68,56,0.2)] transition-all duration-500"
                 style={{
-                  height: `${rightBarDisplayHeight}%`,
+                  height: `${Math.max(1, rightBarHeightPercent)}%`,
                 }}
               >
                 {/* GPS Violations (Red segment at top) */}
@@ -430,16 +429,17 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ charts, loading }) =>
                   <div
                     style={{
                       flex: gpsViolations,
-                      minHeight: '18px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       background: 'linear-gradient(180deg, #f04438 0%, rgba(240, 68, 56, 0.5) 100%)',
                     }}
                   >
-                    <span className="text-white text-[10px] font-black">
-                      {gpsViolations.toLocaleString()}
-                    </span>
+                    {rightBarHeightPercent > 10 && (
+                      <span className="text-white text-[10px] font-black drop-shadow-md">
+                        {gpsViolations}
+                      </span>
+                    )}
                   </div>
                 )}
                 {/* Device Anomalies (Orange segment at bottom) */}
@@ -447,20 +447,24 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ charts, loading }) =>
                   <div
                     style={{
                       flex: deviceAnomalies,
-                      minHeight: '18px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'linear-gradient(180deg, #f79009 0%, rgba(247, 144, 9, 0.5) 100%)',
+                      background: 'linear-gradient(180deg, #f79009 0%, rgba(247, 144, 9, 0.6) 100%)',
                     }}
                   >
-                    <span className="text-white text-[10px] font-black">
-                      {deviceAnomalies.toLocaleString()}
-                    </span>
+                    {rightBarHeightPercent > 10 && (
+                      <span className="text-white text-[10px] font-black drop-shadow-md">
+                        {deviceAnomalies}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
-              <span className="text-slate-500 dark:text-[#8b90b8] text-[9px] font-bold mt-2 whitespace-nowrap text-center">
+              <span className="absolute -top-5 text-slate-900 dark:text-white text-[10px] font-black tracking-tight bg-slate-100 dark:bg-slate-950/40 px-1 rounded shadow-sm">
+                {rightTotal.toLocaleString()}
+              </span>
+              <span className="absolute top-full mt-2 text-slate-500 dark:text-[#8b90b8] text-[9px] font-bold whitespace-nowrap text-center">
                 Flagged Anomalies
               </span>
             </div>

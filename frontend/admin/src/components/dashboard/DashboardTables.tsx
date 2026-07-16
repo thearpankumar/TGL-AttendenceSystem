@@ -8,6 +8,8 @@ import {
   XCircle,
   MessageSquareWarning,
   Users2,
+  PartyPopper,
+  ShieldCheck,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -125,7 +127,7 @@ const RescueListPanel: React.FC<{ data: WorklistsData }> = ({ data }) => {
           <div className="worklist-body">
             {rescueList.length === 0 ? (
               <div className="worklist-empty">
-                <span className="worklist-empty-icon">🎉</span>
+                <PartyPopper size={28} className="text-emerald-500 mb-2 opacity-80" />
                 <span className="worklist-empty-text">No students at risk right now</span>
               </div>
             ) : (
@@ -189,8 +191,8 @@ const QuarantinePanel: React.FC<{ data: WorklistsData }> = ({ data }) => {
           <div className="worklist-body">
             {list.length === 0 ? (
               <div className="worklist-empty">
-                <span className="worklist-empty-icon">🛡️</span>
-                <span className="worklist-empty-text">No flagged records — all clear</span>
+                <ShieldCheck size={28} className="text-cyan-500 mb-2 opacity-80" />
+                <span className="worklist-empty-text">No active security flags</span>
               </div>
             ) : (
               list.map((entry, idx) => (
@@ -253,7 +255,7 @@ const LowBatchesPanel: React.FC<{ data: WorklistsData }> = ({ data }) => {
           <div className="worklist-body">
             {lowBatches.length === 0 ? (
               <div className="worklist-empty">
-                <span className="worklist-empty-icon">✅</span>
+                <CheckCircle2 size={28} className="text-emerald-500 mb-2 opacity-80" />
                 <span className="worklist-empty-text">All batches are on track</span>
               </div>
             ) : (

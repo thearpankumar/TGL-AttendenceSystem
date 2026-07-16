@@ -1,8 +1,38 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, ShieldCheck, Users, AlertTriangle, Info, ArrowRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { GraduationCap, ShieldCheck, Users, AlertTriangle, Info, ArrowRight, ArrowUp, ArrowDown, Minus, Cpu, Server, Container } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
+
+export interface HealthComponent {
+  name: string;
+  healthy: boolean;
+  score: number;
+  weight: number;
+  details: {
+    modelLoaded?: boolean;
+    modelPath?: string | null;
+    modelSize?: number;
+    express?: boolean;
+    redis?: boolean;
+    mongodb?: boolean;
+    latency?: number;
+    containers?: Array<{ name: string; healthy: boolean; status: string }>;
+    healthyCount?: number;
+    totalCount?: number;
+    authEndpoint?: boolean;
+    dashboardEndpoint?: boolean;
+    adminCount?: number;
+    error?: string | null;
+  };
+}
+
+export interface IntegrityComponents {
+  aiModel?: HealthComponent;
+  backend?: HealthComponent;
+  studentContainers?: HealthComponent;
+  adminService?: HealthComponent;
+}
 
 export interface MetricPulse {
   value: number;
@@ -10,6 +40,7 @@ export interface MetricPulse {
   delta: number;
   deltaType: 'up' | 'down' | 'right';
   status: 'On Track' | 'At Risk' | 'Critical';
+  components?: IntegrityComponents;
 }
 
 export interface QuarantinePulse {
@@ -177,7 +208,7 @@ const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ pulse, loading }) =
 
   // Card visual theme driven by value position on the bar, not the coarser API status text
   const eligC  = STATUS_COLORS[valueToColorLevel(pulse.eligibility.value)];
-  const integC = STATUS_COLORS[valueToColorLevel(pulse.integrity.value)];
+  const intC   = STATUS_COLORS[valueToColorLevel(pulse.integrity.value)];
   const turnC  = STATUS_COLORS[valueToColorLevel(pulse.turnout.value)];
   // Quarantine is a count, not a %, so keep using the API status
   const quarC  = STATUS_COLORS[pulse.quarantine.status];
@@ -235,17 +266,17 @@ const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ pulse, loading }) =
       {/* 2. System Integrity Score */}
       <motion.div
         variants={cardVariants}
-        className={`glass-card ${integC.card_class}`}
-        style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '190px' }}
+        className={`glass-card ${intC.card_class}`}
+        style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '190px', position: 'relative' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
           <div style={{
             width: '56px', height: '56px', borderRadius: '9999px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: integC.icon_bg, border: integC.icon_border,
-            boxShadow: integC.icon_shadow, flexShrink: 0,
+            backgroundColor: intC.icon_bg, border: intC.icon_border,
+            boxShadow: intC.icon_shadow, flexShrink: 0,
           }}>
-            <ShieldCheck className={integC.icon_color} size={26} />
+            <ShieldCheck className={intC.icon_color} size={26} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -255,22 +286,32 @@ const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ pulse, loading }) =
                 <span className="widget-tooltip">Measures session security and data legitimacy.</span>
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '4px', width: '100%' }}>
-              <span className={`${integC.value} text-3xl font-extrabold tracking-tight`}>{pulse.integrity.value}%</span>
-              <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', fontWeight: 'bold', backgroundColor: integC.badge_bg, color: integC.badge_text, border: integC.badge_border, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                <span className={`w-1.5 h-1.5 rounded-full ${integC.dot} status-dot-blink`} />
-                {pulse.integrity.status}
-              </span>
-            </div>
           </div>
         </div>
-        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div className="widget-progress-track">
-            <div className="widget-progress-thumb" style={{ left: `${Math.min(Math.max(pulse.integrity.value, 0), 100)}%` }} />
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span className={`${intC.value} text-[56px] font-black tracking-tighter leading-none drop-shadow-sm`}>{pulse.integrity.value}%</span>
+            <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '11px', fontWeight: 'bold', backgroundColor: intC.badge_bg, color: intC.badge_text, border: intC.badge_border, display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, transform: 'translateY(4px)' }}>
+              <span className={`w-2 h-2 rounded-full ${intC.dot} status-dot-blink`} />
+              {pulse.integrity.value >= 85 ? 'Healthy' : pulse.integrity.value >= 70 ? 'Degraded' : 'Critical'}
+            </span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="text-slate-700 dark:text-[#8b90b8] text-xs font-semibold">Target: &ge; {pulse.integrity.target}%</span>
-            <DeltaIndicator delta={pulse.integrity.delta} deltaType={pulse.integrity.deltaType} label="vs last week" />
+        </div>
+
+        {/* Triangle Icon Cluster in the bottom-right */}
+        <div className="absolute bottom-6 right-6 w-[42px] h-[42px]">
+          {/* Top Center Icon (AI Model) */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[22px] h-[22px] rounded-md bg-white/60 dark:bg-slate-800/80 border border-slate-200/50 dark:border-white/10 shadow-sm flex items-center justify-center backdrop-blur-md" title={`AI Model: ${pulse.integrity.components?.aiModel?.score || 0}/25`}>
+            <Cpu size={12} className={pulse.integrity.components?.aiModel?.healthy !== false ? 'text-emerald-600 dark:text-[#32d583]' : 'text-red-600 dark:text-[#f97066]'} />
+          </div>
+          {/* Bottom Left Icon (Backend) */}
+          <div className="absolute bottom-0 left-0 w-[22px] h-[22px] rounded-md bg-white/60 dark:bg-slate-800/80 border border-slate-200/50 dark:border-white/10 shadow-sm flex items-center justify-center backdrop-blur-md" title={`Backend: ${pulse.integrity.components?.backend?.score || 0}/25`}>
+            <Server size={12} className={pulse.integrity.components?.backend?.healthy !== false ? 'text-emerald-600 dark:text-[#32d583]' : 'text-red-600 dark:text-[#f97066]'} />
+          </div>
+          {/* Bottom Right Icon (Containers) */}
+          <div className="absolute bottom-0 right-0 w-[22px] h-[22px] rounded-md bg-white/60 dark:bg-slate-800/80 border border-slate-200/50 dark:border-white/10 shadow-sm flex items-center justify-center backdrop-blur-md" title={`Containers: ${pulse.integrity.components?.studentContainers?.score || 0}/25`}>
+            <Container size={12} className={pulse.integrity.components?.studentContainers?.healthy !== false ? 'text-emerald-600 dark:text-[#32d583]' : 'text-red-600 dark:text-[#f97066]'} />
           </div>
         </div>
       </motion.div>
