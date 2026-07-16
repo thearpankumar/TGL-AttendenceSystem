@@ -675,7 +675,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_score",
+          "expr": "max(attendix_system_health_score)",
           "legendFormat": "Score",
           "refId": "A"
         }
