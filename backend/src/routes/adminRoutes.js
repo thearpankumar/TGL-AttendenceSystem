@@ -29,6 +29,7 @@ router.use(adminLimiter);
 
 router.get('/profile', adminController.getAdminProfile);
 router.get('/dashboard', adminController.getDashboardStats);
+router.get('/dashboard/filters', adminController.getDashboardFilters);
 router.get('/dashboard/recent-activity', adminController.getRecentActivity);
 router.get('/dashboard/attendance-series', adminController.getAttendanceSeries);
 router.get('/dashboard/sessions-by-date', adminController.getSessionsByDate);

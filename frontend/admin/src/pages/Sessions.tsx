@@ -287,7 +287,7 @@ const Sessions = () => {
                   border: '1px solid var(--color-warning, #f59e0b)',
                 }}>
                   ⚠️ No active short links available.{' '}
-                  <a href="/admin/shortlinks" style={{ color: 'var(--color-primary, #4f46e5)' }}>Create one on the Short Links page →</a>
+                  <Link to="/shortlinks" style={{ color: 'var(--color-primary, #4f46e5)' }}>Create one on the Short Links page →</Link>
                 </div>
               ) : (
                 <>

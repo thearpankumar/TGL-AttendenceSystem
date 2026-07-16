@@ -1,4 +1,20 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+vi.mock('framer-motion', () => {
+  const React = require('react');
+  const makeTag = (tag) =>
+    React.forwardRef(({ children, ...props }, ref) =>
+      React.createElement(String(tag), { ...props, ref }, children)
+    );
+  return {
+    motion: new Proxy({}, { get: (_t, tag) => makeTag(tag) }),
+    AnimatePresence: ({ children }) => React.createElement(React.Fragment, null, children),
+    useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
+    useMotionValue: (v) => ({ get: () => v, set: vi.fn() }),
+    useTransform: (_v, _i, o) => ({ get: () => o[0] }),
+  };
+});
 
 class LocalStorageMock {
   constructor() {
@@ -39,8 +55,6 @@ Object.defineProperty(global, 'localStorage', {
   configurable: true
 });
 
-import { vi } from 'vitest';
-
 vi.mock('axios', () => {
   return {
     default: {
@@ -70,3 +84,28 @@ vi.mock('react-toastify', () => {
   };
 });
 
+global.console = {
+  ...console,
+  error: vi.fn((...args) => {
+    const msg = args[0];
+    if (
+      typeof msg === 'string' &&
+      (msg.includes('act(...)') ||
+        msg.includes('Each child in a list should have a unique "key" prop') ||
+        msg.includes('key" prop'))
+    ) {
+      return;
+    }
+    console.warn(...args);
+  }),
+  warn: vi.fn((...args) => {
+    const msg = args[0];
+    if (
+      typeof msg === 'string' &&
+      msg.includes('React Router Future Flag')
+    ) {
+      return;
+    }
+    console.warn(...args);
+  }),
+};

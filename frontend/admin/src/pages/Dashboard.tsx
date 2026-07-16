@@ -1,65 +1,114 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { MapPin, ClipboardList, Users, Flag } from 'lucide-react';
-import { motion } from 'framer-motion';
 import PageHeader from '../components/ui/PageHeader';
-import StatTile from '../components/ui/StatTile';
-import { SkeletonTiles } from '../components/ui/Skeleton';
-import AttendanceChart from '../components/ui/AttendanceChart';
-import ErrorBoundary from '../components/ui/ErrorBoundary';
+import DashboardWidgets, { DashboardPulseData } from '../components/dashboard/DashboardWidgets';
+import DashboardFilters from '../components/dashboard/DashboardFilters';
+import DashboardCharts, { ChartFunnel, ChartIntegrityBreakdown, WeeklyTrendPoint } from '../components/dashboard/DashboardCharts';
+import DashboardTables, { WorklistsData } from '../components/dashboard/DashboardTables';
 
-interface DashboardStats {
-  totalLocations: number;
-  activeSessions: number;
-  totalAttendance: number;
-  flaggedUnreviewed: number;
+interface DashboardData {
+  pulse: DashboardPulseData;
+  charts: {
+    funnel: ChartFunnel;
+    integrityBreakdown: ChartIntegrityBreakdown;
+    weeklyTrends: WeeklyTrendPoint[];
+  };
+  worklists: WorklistsData;
+  lastUpdated: string;
+}
+
+export interface DashboardFiltersState {
+  batch: string;
+  center: string;
+  timeframe: string;
+  riskLevel: string;
 }
 
 const Dashboard = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  
   const abortRef = useRef<AbortController | null>(null);
+  const filtersRef = useRef<DashboardFiltersState>({
+    batch: 'all',
+    center: 'all',
+    timeframe: '',
+    riskLevel: 'All Levels',
+  });
+  const isMountedRef = useRef(true);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     abortRef.current?.abort();
     abortRef.current = new AbortController();
+
     try {
-      const res = await axios.get<DashboardStats>('/api/admin/dashboard', { signal: abortRef.current.signal });
-      setStats(res.data);
+      const filtersToUse = filtersRef.current;
+      const params: Record<string, string> = {};
+      
+      if (filtersToUse.batch && filtersToUse.batch !== 'all') {
+        params.batchId = filtersToUse.batch;
+      }
+      if (filtersToUse.center && filtersToUse.center !== 'all') {
+        params.locationId = filtersToUse.center;
+      }
+      if (filtersToUse.timeframe) {
+        params.timeframe = filtersToUse.timeframe;
+      }
+      if (filtersToUse.riskLevel && filtersToUse.riskLevel !== 'All Levels') {
+        params.riskLevel = filtersToUse.riskLevel;
+      }
+
+      const res = await axios.get<DashboardData>('/api/admin/dashboard', {
+        params,
+        signal: abortRef.current.signal,
+      });
+      
+      if (isMountedRef.current) {
+        setData(res.data);
+      }
     } catch (error) {
-      if (error instanceof Error && error.name !== 'CanceledError') toast.error('Failed to fetch stats');
+      if ((error as { name?: string }).name !== 'CanceledError' && isMountedRef.current) {
+        toast.error('Failed to fetch dashboard metrics');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && !isSilent) {
+        setLoading(false);
+      }
     }
-  }, []); // abortRef is a mutable ref, so it doesn't need to be in the dependency array
+  }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => { clearInterval(interval); abortRef.current?.abort(); };
+    
+    const interval = setInterval(() => fetchStats(true), 60000);
+    
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      abortRef.current?.abort();
+    };
+  }, [fetchStats]);
+
+  const handleFilterChange = useCallback((newFilters: DashboardFiltersState) => {
+    filtersRef.current = newFilters;
+    fetchStats();
   }, [fetchStats]);
 
   return (
-    <div className="container">
-      <PageHeader title="Dashboard" />
-
-      {loading ? (
-        <SkeletonTiles count={4} />
-      ) : (
-        <motion.div className="grid" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <StatTile label="Total Locations"    value={stats?.totalLocations ?? 0}    icon={MapPin}       linkTo="/locations" linkLabel="Manage" />
-          <StatTile label="Active Sessions"    value={stats?.activeSessions ?? 0}    icon={ClipboardList} tone="success" linkTo="/sessions" linkLabel="View" />
-          <StatTile label="Total Attendance"   value={stats?.totalAttendance ?? 0}   icon={Users} linkTo="/sessions" linkLabel="Details" />
-          <StatTile label="Flagged Unreviewed" value={stats?.flaggedUnreviewed ?? 0} icon={Flag}  tone="danger" linkTo="/flagged" linkLabel="Review" />
-        </motion.div>
-      )}
-
-      <div className="card mt-6">
-        <ErrorBoundary fallback={<div className="chart-empty chart-error">Failed to render attendance chart.</div>}>
-          <AttendanceChart />
-        </ErrorBoundary>
+    <div className="container min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 flex flex-col gap-6 transition-colors duration-300">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <PageHeader title="Command Center" />
+          <p className="text-slate-500 dark:text-slate-400 text-sm transition-colors duration-300">Real-time Insights. Actionable Decisions.</p>
+        </div>
+        <DashboardFilters onFilterChange={handleFilterChange} />
       </div>
+      <DashboardWidgets pulse={data?.pulse || null} loading={loading} />
+      <DashboardCharts charts={data?.charts || null} loading={loading} />
+      <DashboardTables worklists={data?.worklists || null} loading={loading} />
     </div>
   );
 };

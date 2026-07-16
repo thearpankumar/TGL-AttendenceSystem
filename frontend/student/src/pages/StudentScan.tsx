@@ -198,7 +198,7 @@ export default function StudentScan() {
       }
       const e = err as { name: string; message: string };
       const msgs: Record<string, string> = {
-        NotAllowedError: 'Camera permission denied. Enable camera in browser settings and refresh.',
+        NotAllowedError: 'Camera permission denied. Tap the lock/padlock icon in your URL bar to allow Camera access. (No need to clear cookies)',
         NotFoundError: 'No camera found on this device.',
         NotReadableError: 'Camera is in use by another app. Close it and refresh.',
       };
@@ -273,7 +273,7 @@ export default function StudentScan() {
     const onFinalFail = (err: GeolocationPositionError) => {
       if (err.code === 1) {
         setLocStatus('blocked');
-        setLocErrMsg('Permission denied. Tap the lock icon in your browser URL bar and allow Location.');
+        setLocErrMsg('Location permission denied. Tap the lock/padlock icon in your browser URL bar, choose "Site Settings" or "Permissions", and allow Location. (You do not need to clear cookies)');
       } else {
         setLocStatus('denied');
         setLocErrMsg(
@@ -292,7 +292,7 @@ export default function StudentScan() {
       navigator.geolocation.getCurrentPosition(onSuccess, onFinalFail, {
         enableHighAccuracy: false,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: 0, // FIXED: Set to 0 to prevent browser from returning stale cached "cookie" locations
       });
     }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
   }, []);
