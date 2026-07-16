@@ -134,6 +134,10 @@ if (config.nodeEnv !== 'test') {
 
   app.get('/metrics', async (req, res) => {
     try {
+      // Trigger system health calculation so metrics are fresh on every scrape
+      const { getSystemIntegrityScore } = require('./services/systemHealth');
+      await getSystemIntegrityScore();
+
       res.set('Content-Type', promClient.register.contentType);
       res.end(await promClient.register.metrics());
     } catch (err) {

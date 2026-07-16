@@ -197,7 +197,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 18 },
+      "gridPos": { "h": 6, "w": 16, "x": 0, "y": 18 },
       "id": 13,
       "options": {
         "legend": { "calcs": ["last"], "displayMode": "list", "placement": "right" },
@@ -646,15 +646,8 @@
     },
 
     {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 67 },
-      "id": 105,
-      "title": "System Health Score",
-      "type": "row"
-    },
-    {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Overall System Integrity Score (0-100). Calculated from AI Model (25%) + Backend (25%) + Student Containers (25%) + Admin Service (25%).",
+      "description": "Overall System Integrity Score (0-100).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -671,7 +664,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 68 },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 18 },
       "id": 19,
       "options": {
         "orientation": "auto",
@@ -687,207 +680,9 @@
           "refId": "A"
         }
       ],
-      "title": "System Health Score",
+      "title": "Attendix system health",
       "type": "gauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "AI Model component score (BlazeFace model health). 25 = Healthy, 0 = Unhealthy.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 25 }
-            ]
-          },
-          "mappings": [
-            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" }, "25": { "color": "green", "index": 1, "text": "OK" } }, "type": "value" }
-          ]
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 6, "y": 68 },
-      "id": 20,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_component_score{component=\"aiModel\"}",
-          "legendFormat": "AI Model",
-          "refId": "A"
-        }
-      ],
-      "title": "AI Model (25%)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Backend component score (Express + Redis + MongoDB). 25 = All healthy, partial = Some degraded.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 12 },
-              { "color": "green", "value": 25 }
-            ]
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 68 },
-      "id": 21,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_component_score{component=\"backend\"}",
-          "legendFormat": "Backend",
-          "refId": "A"
-        }
-      ],
-      "title": "Backend (25%)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Student Containers component score. 25 = All containers running, 0 = None reachable.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 12 },
-              { "color": "green", "value": 25 }
-            ]
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 14, "y": 68 },
-      "id": 22,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_component_score{component=\"studentContainers\"}",
-          "legendFormat": "Containers",
-          "refId": "A"
-        }
-      ],
-      "title": "Containers (25%)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Admin Service component score. 25 = Admin API fully functional.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 12 },
-              { "color": "green", "value": 25 }
-            ]
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 18, "y": 68 },
-      "id": 23,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_component_score{component=\"adminService\"}",
-          "legendFormat": "Admin",
-          "refId": "A"
-        }
-      ],
-      "title": "Admin (25%)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "System Health Score trend over time.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "percent",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 },
-          "max": 100,
-          "min": 0
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 72 },
-      "id": 24,
-      "options": {
-        "legend": { "calcs": ["mean", "min", "max"], "displayMode": "table", "placement": "right" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_score",
-          "legendFormat": "Total Score",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "attendix_system_health_component_score",
-          "legendFormat": "{{component}}",
-          "refId": "B"
-        }
-      ],
-      "title": "System Health Score Trend",
-      "type": "timeseries"
     }
-
   ],
   "refresh": "30s",
   "schemaVersion": 39,
