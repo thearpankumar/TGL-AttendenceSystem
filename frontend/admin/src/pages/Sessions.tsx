@@ -81,7 +81,7 @@ const Sessions = () => {
       ]);
       setSessions(sessionsRes.data);
       setLocations(locationsRes.data);
-      setActiveShortLinks((shortLinksRes.data.shortLinks ?? []).filter((l) => l.isActive));
+      setActiveShortLinks((shortLinksRes.data.shortLinks ?? []).filter((l) => l.isActive || !l.sessionId));
       setBatches(batchesRes.data);
     } catch (error) {
       if ((error as { name?: string }).name !== 'CanceledError') toast.error('Failed to fetch data');
