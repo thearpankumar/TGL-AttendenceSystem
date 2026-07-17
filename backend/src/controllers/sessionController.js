@@ -61,7 +61,22 @@ const createSession = async (req, res) => {
 
 const getSessions = async (req, res) => {
   try {
-    const sessions = await Session.find({ createdBy: req.admin._id })
+    const { locationId, date } = req.query;
+    const query = { createdBy: req.admin._id };
+
+    if (locationId) {
+      query.locationId = locationId;
+    }
+
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const sessions = await Session.find(query)
       .populate('locationId', 'name latitude longitude radiusMeters')
       .populate('batchId', 'name')
       .select('-totpSecret')
@@ -212,20 +227,20 @@ const exportSessionAttendance = async (req, res) => {
       return res.status(404).json({ message: 'Session not found' });
     }
 
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const sessionName = session.description || (session.locationId && session.locationId.name) || 'Session';
-    const safeSessionName = sessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const locationName = session.locationId?.name || 'Unknown Location';
+    const batchName = session.batchId?.name ? `_${session.batchId.name}` : '';
     
-    const safeFilename = `TGL-attendix-${safeSessionName}-time${timeStr}.xlsx`;
+    const sessionDate = session.createdAt ? new Date(session.createdAt) : new Date();
+    const dateStr = sessionDate.toISOString().split('T')[0];
+    
+    const rawFilename = `${locationName}${batchName}_${dateStr}`;
+    const safeFilename = `${rawFilename.replace(/[^a-zA-Z0-9_.-]/g, '_')}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
 
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
     const worksheet = workbook.addWorksheet('Attendance');
-
-    const locationName = session.locationId?.name || 'Unknown Location';
     const batch = session.batchId;
 
     if (batch) {

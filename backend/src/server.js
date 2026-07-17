@@ -148,6 +148,7 @@ if (config.nodeEnv !== 'test') {
 
 // ─── Application routes ───────────────────────────────────────────────────
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/admin/security', require('./routes/adminSecurityRoutes'));
 app.use('/api/config', require('./routes/configRoutes'));
 app.use('/api/attend', require('./routes/studentRoutes'));
 app.use('/api/device', require('./routes/deviceVerificationRoutes'));

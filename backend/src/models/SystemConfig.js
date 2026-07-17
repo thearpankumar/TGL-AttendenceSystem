@@ -5,6 +5,63 @@ const systemConfigSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  
+  // GPS Validation Configuration
+  gpsValidation: {
+    accuracyVerySuspicious: {
+      type: Number,
+      default: 3,
+    },
+    accuracySuspicious: {
+      type: Number,
+      default: 10,
+    },
+    speedThreshold: {
+      type: Number,
+      default: 50,
+    },
+    timestampDriftMax: {
+      type: Number,
+      default: 60000,
+    },
+    positionJumpThreshold: {
+      type: Number,
+      default: 500,
+    },
+    altitudeZeroPenalty: {
+      type: Boolean,
+      default: true,
+    },
+    enabled: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  
+  // Emulator Detection Configuration
+  emulatorDetection: {
+    enabled: {
+      type: Boolean,
+      default: true,
+    },
+    blockOnHighSeverity: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  
+  // Device Trust Scoring Configuration
+  trustScore: {
+    anomalyPenalty: {
+      type: Number,
+      default: 15,
+    },
+    safeReviewBonus: {
+      type: Number,
+      default: 10,
+    },
+  },
+  
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
@@ -16,6 +73,12 @@ const systemConfigSchema = new mongoose.Schema({
   },
 });
 
-// Since we only ever need one config document for global settings,
-// we don't need extensive indexing, but it's good to track who updated it.
+systemConfigSchema.statics.getConfig = async function() {
+  let config = await this.findOne();
+  if (!config) {
+    config = await this.create({});
+  }
+  return config;
+};
+
 module.exports = mongoose.model('SystemConfig', systemConfigSchema);

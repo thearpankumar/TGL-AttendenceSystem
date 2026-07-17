@@ -14,6 +14,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { SkeletonRows } from '../components/ui/Skeleton';
+import SessionFilters from '../components/ui/SessionFilters';
 
 interface Location { _id: string; name: string; radiusMeters: number; }
 interface ShortLink { _id: string; shortCode: string; isActive: boolean; sessionId?: unknown; }
@@ -51,13 +52,19 @@ const Sessions = () => {
   const [deleting, setDeleting] = useState(false);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const filtersRef = useRef<{ locationId: string; date: string }>({ locationId: '', date: '' });
 
   const fetchData = useCallback(async () => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     try {
+      const filters = filtersRef.current;
+      const params: Record<string, string> = {};
+      if (filters.locationId) params.locationId = filters.locationId;
+      if (filters.date) params.date = filters.date;
+
       const [sessionsRes, locationsRes, shortLinksRes, batchesRes] = await Promise.all([
-        axios.get<Session[]>('/api/admin/sessions', { signal: abortRef.current.signal }),
+        axios.get<Session[]>('/api/admin/sessions', { params, signal: abortRef.current.signal }),
         axios.get<Location[]>('/api/admin/locations', { signal: abortRef.current.signal }),
         axios.get<{ shortLinks: ShortLink[] }>('/api/admin/shortlinks', { signal: abortRef.current.signal }),
         axios.get<Batch[]>('/api/admin/batches', { signal: abortRef.current.signal }),
@@ -75,6 +82,11 @@ const Sessions = () => {
     fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => { clearInterval(interval); abortRef.current?.abort(); };
+  }, [fetchData]);
+
+  const handleFilterChange = useCallback((newFilters: { locationId: string; date: string }) => {
+    filtersRef.current = newFilters;
+    fetchData();
   }, [fetchData]);
 
   const isExpired = (session: Session) => new Date(session.expiresAt) < new Date();
@@ -197,9 +209,12 @@ const Sessions = () => {
 
   return (
     <div className="container">
-      <PageHeader title="Attendance Sessions">
-        <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={locations.length === 0}>Create Session</button>
-      </PageHeader>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <PageHeader title="Attendance Sessions">
+          <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={locations.length === 0}>Create Session</button>
+        </PageHeader>
+        <SessionFilters locations={locations} onFilterChange={handleFilterChange} />
+      </div>
 
       {locations.length === 0 && (
         <div className="card"><p>No locations found. <Link to="/locations">Create a location first</Link></p></div>

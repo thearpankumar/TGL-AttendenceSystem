@@ -15,6 +15,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.2.0",
+    "@mui/material": "^9.2.0",
     "axios": "^1.6.8",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",

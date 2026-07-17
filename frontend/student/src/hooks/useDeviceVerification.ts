@@ -66,6 +66,13 @@ function detectEmulation(): { isEmulation: boolean; inconsistencies: string[]; m
   const desktopGPUPatterns = /NVIDIA|AMD|Radeon|GeForce|Intel.*Graphics|RTX|GTX|Arc/i;
   const isDesktopGPU = desktopGPUPatterns.test(webglInfo.renderer);
   const isMobileGPU = /Adreno|Mali|PowerVR|Apple GPU|Intel.* HD Graphics/i.test(webglInfo.renderer);
+
+  const emulatorGPUPatterns = /SwiftShader|llvmpipe|Mesa|Gallium|Software|Software Rasterizer|Microsoft Basic Render|VirGL|VMware|VirtualBox/i;
+  const isEmulatorGPU = emulatorGPUPatterns.test(webglInfo.renderer);
+  
+  if (isEmulatorGPU) {
+    inconsistencies.push(`Emulator GPU detected: ${webglInfo.renderer}`);
+  }
   
   if (claimsMobileUA && isDesktopGPU && !isMobileGPU) {
     inconsistencies.push('Desktop GPU detected with mobile User-Agent');
@@ -89,6 +96,17 @@ function detectEmulation(): { isEmulation: boolean; inconsistencies: string[]; m
   
   if (claimsDesktopUA && maxTouchPoints > 0 && hasCoarsePointer) {
     inconsistencies.push('Desktop UA but touch device detected (possible emulation having UA issues)');
+  }
+
+  if (deviceMemory !== null) {
+    const roundedPatterns = [2, 4, 8, 16, 32];
+    if (roundedPatterns.includes(deviceMemory) && isEmulatorGPU) {
+      inconsistencies.push(`Device memory exactly ${deviceMemory}GB with emulator GPU`);
+    }
+  }
+
+  if (maxTouchPoints === 1 && claimsMobileUA) {
+    inconsistencies.push('maxTouchPoints exactly 1 with mobile UA (possible emulator)');
   }
 
   const metrics: DeviceMetrics = {

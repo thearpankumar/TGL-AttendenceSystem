@@ -101,6 +101,7 @@ const submitAttendance = async (req, res) => {
       devBypassCamera = false,
       devBypassGps = false,
       devBypassWebauthn = false,
+      gpsMetadata,
     } = req.body;
 
     const systemConfig = await SystemConfig.findOne();
@@ -272,6 +273,36 @@ const submitAttendance = async (req, res) => {
 
     const isBypassed = isDevBypassAll && (devBypassCamera || devBypassGps || devBypassWebauthn);
 
+    const gpsValidation = req.gpsValidation || { anomalies: [], confidence: 'medium' };
+    const emulatorDetection = req.emulatorDetection || { detected: false, flags: [] };
+    const deviceIntegrity = req.deviceIntegrity || { checks: [], passed: true };
+
+    const hasHighSeverityGPS = gpsValidation.anomalies.some(a => a.severity === 'high');
+    const hasHighSeverityEmulator = emulatorDetection.hasHighSeverity;
+    const hasSecurityFlags = hasHighSeverityGPS || hasHighSeverityEmulator || emulatorDetection.detected;
+
+    let deviceFlag = deviceValidation.deviceFlag || null;
+    let flagReason = null;
+
+    if (hasHighSeverityGPS) {
+      deviceFlag = 'GPS_ANOMALY_DETECTED';
+      flagReason = `GPS anomalies: ${gpsValidation.anomalies.filter(a => a.severity === 'high').map(a => a.type).join(', ')}`;
+    }
+    if (emulatorDetection.detected) {
+      deviceFlag = 'EMULATOR_DETECTED';
+      flagReason = `Emulator detected: ${emulatorDetection.flags.map(f => f.type).join(', ')}`;
+    }
+    if (!deviceIntegrity.passed && !hasSecurityFlags) {
+      deviceFlag = 'INTEGRITY_CHECK_FAILED';
+      flagReason = `Integrity issues: ${deviceIntegrity.checks.map(c => c.type).join(', ')}`;
+    }
+    if (isBypassed) {
+      deviceFlag = deviceFlag || 'DEV_BYPASS_ENABLED';
+      flagReason = flagReason || `DEV_BYPASS_ENABLED`;
+    }
+
+    const shouldFlag = hasSecurityFlags || isBypassed || !deviceIntegrity.passed;
+
     const attendance = await Attendance.create({
       sessionId: session._id,
       studentName,
@@ -290,17 +321,34 @@ const submitAttendance = async (req, res) => {
       deviceFingerprint: deviceFingerprint,
       deviceFingerprintHash: deviceFingerprintHash,
       deviceFirstSeen: deviceValidation.firstSeen,
-      deviceFlag: deviceValidation.deviceFlag || null,
+      deviceFlag: deviceFlag,
       webauthnVerified: actualWebauthnVerified,
       flagReviewed: false,
-      flagged: isBypassed,
-      flagReason: isBypassed ? 'DEV_BYPASS_ENABLED' : null,
-      flagDetails: isBypassed ? `Camera:${devBypassCamera}, GPS:${devBypassGps}, WebAuthn:${devBypassWebauthn}` : null,
+      flagged: shouldFlag,
+      flagReason: flagReason,
+      flagDetails: isBypassed 
+        ? `Camera:${devBypassCamera}, GPS:${devBypassGps}, WebAuthn:${devBypassWebauthn}` 
+        : flagReason,
+      gpsAccuracy: gpsMetadata?.accuracy || null,
+      gpsAltitude: gpsMetadata?.altitude || null,
+      gpsAltitudeAccuracy: gpsMetadata?.altitudeAccuracy || null,
+      gpsSpeed: gpsMetadata?.speed || null,
+      gpsHeading: gpsMetadata?.heading || null,
+      gpsTimestamp: gpsMetadata?.timestamp || null,
+      gpsMockLocation: gpsMetadata?.isMockLocation || false,
+      gpsProvider: gpsMetadata?.provider || null,
+      gpsAnomalies: gpsValidation.anomalies,
+      gpsConfidence: gpsValidation.confidence,
+      emulatorDetected: emulatorDetection.detected,
+      emulatorFlags: emulatorDetection.flags,
+      integrityChecks: deviceIntegrity.checks,
     });
 
-    const responseMessage = deviceValidation.flags && deviceValidation.flags.length > 0
-      ? 'Attendance submitted successfully. Note: Device flagged for review.'
-      : 'Attendance submitted successfully';
+    const responseMessage = shouldFlag
+      ? 'Attendance submitted. Note: Submission flagged for security review.'
+      : deviceValidation.flags && deviceValidation.flags.length > 0
+        ? 'Attendance submitted successfully. Note: Device flagged for review.'
+        : 'Attendance submitted successfully';
 
     try {
       const device = await DeviceFingerprint.findOrCreate(deviceFingerprint);
@@ -312,6 +360,20 @@ const submitAttendance = async (req, res) => {
       }
     } catch (deviceError) {
       logger.warn({ err: deviceError, requestId: req.id }, 'Failed to record device success (non-fatal)');
+    }
+
+    if (hasSecurityFlags) {
+      logger.warn(
+        {
+          requestId: req.id,
+          rollNumber,
+          sessionId: session._id,
+          gpsAnomalies: gpsValidation.anomalies.length,
+          emulatorDetected: emulatorDetection.detected,
+          deviceFlag,
+        },
+        'Attendance submitted with security flags'
+      );
     }
 
     logger.info(

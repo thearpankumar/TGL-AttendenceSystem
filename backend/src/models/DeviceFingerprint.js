@@ -127,6 +127,22 @@ DeviceFingerprintSchema.methods.recordSuccessfulVerification = function(sessionI
   return this.save();
 };
 
+DeviceFingerprintSchema.methods.increaseTrustScore = function(_points) {
+  this.spoofingAttempts = Math.max(0, this.spoofingAttempts - 1);
+  this.verificationFailures = Math.max(0, this.verificationFailures - 1);
+  
+  if (this.sessions.length >= 3 && this.spoofingAttempts === 0) {
+    this.isTrusted = true;
+  }
+  
+  if (this.isBlocked && this.spoofingAttempts < 5) {
+    this.isBlocked = false;
+    this.blockReason = null;
+  }
+  
+  return this.save();
+};
+
 DeviceFingerprintSchema.methods.addUserAgent = function(userAgent) {
   const existing = this.userAgentsSeen.find(u => u.ua === userAgent);
   if (existing) {

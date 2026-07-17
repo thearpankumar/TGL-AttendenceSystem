@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMobileVerification } from '../hooks/useIsMobile';
 import { useFaceDetection } from '../hooks/useFaceDetection';
+import { useDeviceVerification } from '../hooks/useDeviceVerification';
+import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import MobileDeviceRequired from '../components/MobileDeviceRequired';
 import PermissionOnboarding from '../components/PermissionOnboarding';
 import HelpDrawer from '../components/HelpDrawer';
@@ -97,6 +99,20 @@ export default function StudentScan() {
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
   const { isMobile, isEmulation, inconsistencies, checking } = useMobileVerification();
   const { ready: faceReady, detectFace } = useFaceDetection();
+  const { metrics: deviceMetrics } = useDeviceVerification();
+  const { checks: integrityChecks } = useDeviceIntegrity();
+
+  // GPS metadata collection
+  const [gpsMetadata, setGpsMetadata] = useState<{
+    accuracy: number;
+    altitude: number | null;
+    altitudeAccuracy: number | null;
+    speed: number | null;
+    heading: number | null;
+    timestamp: number;
+    isMockLocation?: boolean;
+    provider: string;
+  } | null>(null);
 
 
 
@@ -265,6 +281,25 @@ export default function StudentScan() {
     const onSuccess = (pos: GeolocationPosition) => {
       setLocData({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
       setLocStatus('ok');
+      
+      const detectGPSProvider = (accuracy: number): string => {
+        if (accuracy < 10) return 'gps';
+        if (accuracy < 100) return 'fused';
+        if (accuracy < 1000) return 'network';
+        return 'unknown';
+      };
+      
+      setGpsMetadata({
+        accuracy: pos.coords.accuracy,
+        altitude: pos.coords.altitude,
+        altitudeAccuracy: pos.coords.altitudeAccuracy,
+        speed: pos.coords.speed,
+        heading: pos.coords.heading,
+        timestamp: pos.timestamp,
+        isMockLocation: (pos as unknown as { isMockLocation?: boolean }).isMockLocation || false,
+        provider: detectGPSProvider(pos.coords.accuracy),
+      });
+      
       if (pos.coords.accuracy > 500) {
         flash(<span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={14} /> Weak signal (±{Math.round(pos.coords.accuracy)}m) — location recorded.</span>, true);
       }
@@ -336,6 +371,16 @@ export default function StudentScan() {
     setUsedDevBypassGps(true);
     setLocData({ latitude: 0, longitude: 0 });
     setLocStatus('ok');
+    setGpsMetadata({
+      accuracy: 1,
+      altitude: null,
+      altitudeAccuracy: null,
+      speed: null,
+      heading: null,
+      timestamp: Date.now(),
+      isMockLocation: true,
+      provider: 'mock',
+    });
     flash('Injected mock location for DEV', true);
   };
 
@@ -606,6 +651,14 @@ export default function StudentScan() {
         devBypassCamera: usedDevBypassCamera,
         devBypassGps: usedDevBypassGps,
         devBypassWebauthn: devBypassEnabled && !credentialRef.current,
+        gpsMetadata,
+        deviceMetrics,
+        integrityChecks,
+        emulatorFlags: deviceMetrics?.inconsistencies?.map((inc: string) => ({
+          type: 'CLIENT_DETECTED',
+          severity: 'medium',
+          details: inc,
+        })) || [],
       };
       if (credentialRef.current) body.credential = credentialRef.current;
 

@@ -7,6 +7,7 @@ import PageHeader from '../components/ui/PageHeader';
 import Badge from '../components/ui/Badge';
 import ConfirmModal from '../components/ui/ConfirmModal';
 import { SkeletonTiles, SkeletonRows } from '../components/ui/Skeleton';
+import AdminSecurityReview from '../components/SecurityReview';
 
 interface Session {
   _id: string;
@@ -463,6 +464,13 @@ const SessionDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Security Review Section ─────────────────────── */}
+      <AdminSecurityReview 
+        sessionId={id || ''} 
+        apiBaseUrl={import.meta.env.VITE_API_BASE || '/api'}
+        token={localStorage.getItem('token') || ''}
+      />
 
       {/* ── Attendance table card ──────────────────────── */}
       <div className="card card-table">

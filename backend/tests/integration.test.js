@@ -216,6 +216,38 @@ describe('System Integration Tests', () => {
       expect(res.body[0].attendanceCount).toBeDefined();
     });
 
+    it('should filter sessions by locationId', async () => {
+      const res1 = await request(app)
+        .get(`/api/admin/sessions?locationId=${location._id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(res1.body.length).toBeGreaterThan(0);
+
+      const mongoose = require('mongoose');
+      const fakeId = new mongoose.Types.ObjectId();
+      const res2 = await request(app)
+        .get(`/api/admin/sessions?locationId=${fakeId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(res2.body.length).toBe(0);
+    });
+
+    it('should filter sessions by date', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const res1 = await request(app)
+        .get(`/api/admin/sessions?date=${today}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(res1.body.length).toBeGreaterThan(0);
+
+      const res2 = await request(app)
+        .get(`/api/admin/sessions?date=2000-01-01`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(res2.body.length).toBe(0);
+    });
+
     it('should get session details', async () => {
       const res = await request(app)
         .get(`/api/admin/sessions/${session._id}`)

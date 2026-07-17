@@ -93,7 +93,10 @@ const attendanceSchema = new mongoose.Schema({
       'DEVICE_FINGERPRINT_CHANGE',
       'WEBAUTHN_REPLAY_ATTACK',
       'WEBAUTHN_NOT_SUPPORTED',
-      'WEBAUTHN_CREDENTIAL_SUSPENDED'
+      'WEBAUTHN_CREDENTIAL_SUSPENDED',
+      'GPS_ANOMALY_DETECTED',
+      'EMULATOR_DETECTED',
+      'INTEGRITY_CHECK_FAILED'
     ],
     default: null,
   },
@@ -152,6 +155,113 @@ const attendanceSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  
+  // GPS Quality Metadata
+  gpsAccuracy: {
+    type: Number,
+    default: null,
+  },
+  gpsAltitude: {
+    type: Number,
+    default: null,
+  },
+  gpsAltitudeAccuracy: {
+    type: Number,
+    default: null,
+  },
+  gpsSpeed: {
+    type: Number,
+    default: null,
+  },
+  gpsHeading: {
+    type: Number,
+    default: null,
+  },
+  gpsTimestamp: {
+    type: Number,
+    default: null,
+  },
+  gpsMockLocation: {
+    type: Boolean,
+    default: false,
+  },
+  gpsProvider: {
+    type: String,
+    enum: [null, 'gps', 'network', 'fused', 'unknown'],
+    default: null,
+  },
+  
+  // GPS Anomaly Detection Results
+  gpsAnomalies: [{
+    type: {
+      type: String,
+      enum: [
+        'ACCURACY_SUSPICIOUS',
+        'ACCURACY_VERY_SUSPICIOUS',
+        'ALTITUDE_ZERO_OR_NULL',
+        'SPEED_IMPOSSIBLE',
+        'POSITION_JUMP',
+        'TIMESTAMP_DRIFT',
+        'ACCURACY_PATTERN',
+        'PROVIDER_MISMATCH',
+      ],
+    },
+    severity: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+      default: 'medium',
+    },
+    details: String,
+    detectedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
+  gpsConfidence: {
+    type: String,
+    enum: ['high', 'medium', 'low', 'suspicious'],
+    default: 'medium',
+  },
+  
+  // Emulator Detection Results
+  emulatorDetected: {
+    type: Boolean,
+    default: false,
+  },
+  emulatorFlags: [{
+    type: {
+      type: String,
+      enum: [
+        'DESKTOP_GPU_DETECTED',
+        'AUDIO_FINGERPRINT_EMULATOR',
+        'TIMING_ANOMALY',
+        'BATTERY_PATTERN_EMULATOR',
+        'SCREEN_RESOLUTION_SUSPICIOUS',
+        'DEVICE_MEMORY_ROUND',
+        'WEBGL_RENDERER_EMULATOR',
+        'PLATFORM_INCONSISTENCY',
+      ],
+    },
+    severity: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+      default: 'medium',
+    },
+    details: String,
+  }],
+  
+  // Root/Integrity Detection
+  integrityChecks: [{
+    type: {
+      type: String,
+      enum: [
+        'TIMING_MANIPULATION',
+        'BROWSER_API_INCONSISTENCY',
+        'POINTER_EVENTS_SUSPICIOUS',
+      ],
+    },
+    details: String,
+  }],
 });
 
 attendanceSchema.index({ sessionId: 1, rollNumber: 1 }, { unique: true });
