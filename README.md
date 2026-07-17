@@ -1,316 +1,186 @@
 # Geotag-Based Attendance System
 
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[![Tests Backend](https://img.shields.io/badge/Tests-269%20passing-brightgreen)](backend/tests/)
+[![Tests Backend](https://img.shields.io/badge/Tests-328%20passing-brightgreen)](backend/tests/)
 [![Coverage](https://img.shields.io/badge/Coverage-Comprehensive-blue)](backend/tests/)
 [![WebAuthn](https://img.shields.io/badge/WebAuthn-Enabled-purple)](https://webauthn.io/)
+[![MediaPipe](https://img.shields.io/badge/MediaPipe-Face_Detection-00B2A9?logo=google&logoColor=white)](https://developers.google.com/mediapipe)
 
-A production-ready attendance system with GPS geolocation, camera verification, **WebAuthn biometric authentication**, and **Redis-powered caching** for handling 1000+ concurrent users.
+A production-ready attendance system integrating high-accuracy GPS geolocation, facial recognition, WebAuthn biometric authentication, and comprehensive device integrity verification. Built to scale for high concurrency environments using Node.js, React, and MongoDB.
 
 ---
 
-## Architecture
+## System Overview
 
-### System Architecture (Production - 1000+ Users)
+The Geotag-Based Attendance System is designed for academic and corporate environments requiring indisputable proof of presence. It ensures that users are physically present at a designated location using a combination of strict GPS boundaries (geofencing), biometric hardware verification (WebAuthn), real-time facial detection (MediaPipe), and device anti-tampering heuristics.
+
+The system employs an "Observer Pattern" for security enforcement: anomalies (such as emulator usage or GPS spoofing) do not outright block the user from submitting attendance, but instead securely flag the record for administrative review. This guarantees a frictionless user experience while providing administrators with total auditing visibility.
+
+---
+
+## Table of Contents
+
+- [System Overview](#system-overview)
+- [Core Features](#core-features)
+- [Architecture & Data Flow](#architecture--data-flow)
+- [Device Security & Integrity](#device-security--integrity)
+- [Workflows](#workflows)
+- [Installation & Deployment](#installation--deployment)
+- [Observability](#observability)
+- [API Documentation](#api-documentation)
+- [Development Guide](#development-guide)
+- [License](#license)
+
+---
+## Core Features
+
+- **WebAuthn Biometrics**: Hardware-level authentication (Face ID, Touch ID, Windows Hello) to prevent credential sharing and impersonation.
+- **Geofence Validation**: High-accuracy coordinate checking against dynamic administrative perimeters.
+- **Facial Detection**: Real-time bounding-box face detection via MediaPipe during photo capture.
+- **Device Integrity Pipeline**: Client and server-side heuristics to detect Android/iOS emulators, mock locations, and CPU timing manipulations.
+- **Administrative Security Review**: Advanced dashboard for bulk verification, session filtering, and anomaly investigation.
+- **Centralized Observability**: Integrated Prometheus, Grafana, and Loki stack for system telemetry and log aggregation.
+- **Enterprise Storage**: S3-compatible cloud storage for secure, presigned, direct-to-bucket photo uploads.
+
+---
+
+## Architecture & Data Flow
+
+### System Architecture
 
 ```mermaid
 graph TB
-    Internet[🌍 Internet Users]
+    Internet[Internet Traffic]
     
-    subgraph "Load Balancer Layer"
-        Caddy[Caddy Reverse Proxy<br/>Automatic SSL<br/>Load Balancing<br/>Port: 80/443]
+    subgraph "Reverse Proxy Layer"
+        Caddy[Caddy Load Balancer / SSL Termination]
     end
     
-    subgraph "Application Layer - 3 Replicas"
-        Backend1[Backend Container 1<br/>Node.js + PM2<br/>2 Workers]
-        Backend2[Backend Container 2<br/>Node.js + PM2<br/>2 Workers]
-        Backend3[Backend Container 3<br/>Node.js + PM2<br/>2 Workers]
+    subgraph "Application Layer"
+        Backend1[Node.js API Node 1]
+        Backend2[Node.js API Node 2]
     end
     
     subgraph "Frontend Layer"
-        AdminFE[Admin Panel<br/>React 18<br/>Port: 3000]
-        StudentFE[Student Page<br/>Vanilla JS<br/>Port: 8080]
+        AdminFE[React Admin SPA]
+        StudentFE[Student PWA]
     end
     
-    subgraph "Database Layer"
-        Mongo1[MongoDB Primary<br/>Port: 27017]
-        Mongo2[MongoDB Secondary<br/>Port: 27018]
-        Mongo3[MongoDB Arbiter<br/>Port: 27019]
+    subgraph "Database & Cache Layer"
+        Mongo[MongoDB Replica Set]
+        Redis[Redis Session Cache]
     end
     
-    subgraph "Cache Layer"
-        Redis[Redis Cache<br/>Session Caching<br/>Port: 6379<br/>512MB Memory]
+    subgraph "Security & ML Layer"
+        MediaPipe[MediaPipe Face Detection]
+        DeviceHeuristics[Device Integrity Middlewares]
     end
     
-    subgraph "External Services"
-        S3[AWS S3<br/>Photo Storage<br/>Direct Upload]
-        Cloudinary[Cloudinary<br/>Image Optimization<br/>Alternative Storage]
+    subgraph "Observability Layer"
+        Prometheus[Prometheus Metrics]
+        Grafana[Grafana Dashboards]
+        Loki[Loki Log Aggregation]
     end
     
-    Internet -->|HTTPS| Caddy
-    Caddy -->|Round Robin| Backend1
-    Caddy -->|Round Robin| Backend2
-    Caddy -->|Round Robin| Backend3
+    Internet --> Caddy
+    Caddy --> AdminFE
+    Caddy --> StudentFE
+    Caddy --> Backend1
+    Caddy --> Backend2
     
-    Caddy -->|Static Files| AdminFE
-    Caddy -->|Static Files| StudentFE
+    Backend1 --> Redis
+    Backend2 --> Redis
     
-    Backend1 -->|Cache-Aside| Redis
-    Backend2 -->|Cache-Aside| Redis
-    Backend3 -->|Cache-Aside| Redis
+    Backend1 --> Mongo
+    Backend2 --> Mongo
     
-    Backend1 -->|Replica Set| Mongo1
-    Backend2 -->|Replica Set| Mongo1
-    Backend3 -->|Replica Set| Mongo1
+    Backend1 --> DeviceHeuristics
+    Backend2 --> DeviceHeuristics
     
-    Mongo1 -.->|Replication| Mongo2
-    Mongo1 -.->|Arbiter| Mongo3
+    StudentFE --> MediaPipe
     
-    Backend1 -->|Presigned URLs| S3
-    Backend2 -->|Presigned URLs| S3
-    Backend3 -->|Presigned URLs| S3
-    
-    Backend1 -.->|Alternative| Cloudinary
-    Backend2 -.->|Alternative| Cloudinary
-    Backend3 -.->|Alternative| Cloudinary
-    
-    style Caddy fill:#4a9eff,stroke:#0066cc,color:#fff
-    style Redis fill:#dc382d,stroke:#a41e11,color:#fff
-    style Mongo1 fill:#47a248,stroke:#2e6b2f,color:#fff
-    style Mongo2 fill:#47a248,stroke:#2e6b2f,color:#fff
-    style Mongo3 fill:#47a248,stroke:#2e6b2f,color:#fff
-    style S3 fill:#ff9900,stroke:#e68a00,color:#fff
+    Backend1 -.-> Prometheus
+    Backend1 -.-> Loki
 ```
 
-### Request Flow Architecture
+### Security Middleware Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant Student as 👨‍🎓 Student
-    participant Caddy as Caddy LB
-    participant Backend as Backend API
-    participant Redis as Redis Cache
-    participant Mongo as MongoDB
-    participant S3 as AWS S3
-    
-    Student->>Caddy: GET /attend/:token
-    Caddy->>Backend: Route to Backend (Round Robin)
-    
-    Backend->>Redis: Check Session Cache
-    
-    alt Cache Hit
-        Redis-->>Backend: Return Cached Session (1-5ms)
-    else Cache Miss
-        Backend->>Mongo: Query Session
-        Mongo-->>Backend: Return Session (10-50ms)
-        Backend->>Redis: Cache Session (TTL: 5min)
-    end
-    
-    Backend-->>Caddy: Return Session Info
-    Caddy-->>Student: Display Attendance Form
-    
-    Student->>Backend: GET /api/attend/:token/upload-url
-    Backend->>S3: Generate Presigned URL
-    S3-->>Backend: Presigned URL (5min expiry)
-    Backend-->>Student: Return Upload URL
-    
-    Student->>S3: PUT Photo (Direct Upload)
-    S3-->>Student: Upload Success
-    
-    Student->>Backend: POST /api/attend/:token<br/>(rollNumber, photoUrl, GPS)
-    
-    Backend->>Backend: Validate GPS Distance
-    Backend->>Mongo: Check Duplicate Roll Number
-    Backend->>Mongo: Save Attendance Record
-    Backend-->>Student: Attendance Submitted ✅
+    participant Client as Student Device
+    participant Gateway as API Router
+    participant Emulator as Emulator Detection
+    participant GPS as GPS Validation
+    participant Integrity as Integrity Middleware
+    participant DB as MongoDB
+
+    Client->>Gateway: POST /attendance (Payload, Telemetry)
+    Gateway->>Emulator: Check WebGL/Canvas Profiles
+    Emulator-->>Gateway: Append Emulator Flags
+    Gateway->>GPS: Analyze Coordinate History & Speed
+    GPS-->>Gateway: Append GPS Flags
+    Gateway->>Integrity: Verify CPU/Pointer Telemetry
+    Integrity-->>Gateway: Append Integrity Flags
+    Gateway->>DB: Save Record (Flagged if anomalies exist)
+    DB-->>Client: 201 Created (Success)
 ```
 
----
-
-## User Workflows
-
-### Admin Workflow
-
-```mermaid
-graph TD
-    Start[🚀 Admin Login] --> Login[JWT Authentication]
-    Login --> Dashboard[📊 Dashboard]
-    
-    Dashboard -->|Manage| Locations[📍 Locations]
-    Dashboard -->|Manage| Sessions[⏰ Sessions]
-    Dashboard -->|Monitor| Attendance[📋 Attendance]
-    Dashboard -->|Manage| Credentials[🔐 Credentials]
-    
-    subgraph "Location Management"
-        Locations --> CreateLoc[Create Location]
-        CreateLoc --> EnterCoords[Enter GPS Coordinates]
-        EnterCoords --> SetRadius[Set Geofence Radius]
-        SetRadius --> SaveLoc[Save Location]
-    end
-    
-    subgraph "Session Management"
-        Sessions --> CreateSess[Create Session]
-        CreateSess --> SelectLoc[Select Location]
-        SelectLoc --> SetDuration[Set Duration]
-        SetDuration --> EnableTOTP{Enable TOTP?}
-        EnableTOTP -->|Yes| GenTOTP[Generate TOTP Secret]
-        EnableTOTP -->|No| GenToken[Generate Session Token]
-        GenTOTP --> GenToken
-        GenToken --> GenLink[Generate Short Link]
-        GenLink --> ShareLink[📤 Share Link/QR Code]
-    end
-    
-    subgraph "Monitoring"
-        Attendance --> ViewLive[View Live Stats]
-        ViewLive --> PollUpdates[Poll Updates 5s]
-        PollUpdates --> ViewVerified[✅ Verified Students]
-        PollUpdates --> ViewFlagged[🚩 Flagged Submissions]
-        PollUpdates --> ExportCSV[📥 Export to CSV]
-    end
-    
-    subgraph "Credential Management"
-        Credentials --> ListCreds[List All Credentials]
-        ListCreds --> SearchRoll[Search by Roll Number]
-        SearchRoll --> ResetCred{Reset Credential?}
-        ResetCred -->|Yes| LogReason[Log Reason + Admin ID]
-        LogReason --> ConfirmReset[Confirm Reset]
-        SearchRoll --> SuspendCred{Suspend?}
-        SuspendCred -->|Yes| LogReason2[Log Reason + Duration]
-        LogReason2 --> ConfirmSuspend[Confirm Suspend]
-    end
-    
-    SaveLoc --> Dashboard
-    ShareLink --> Monitor[👁️ Monitor Session]
-    Monitor --> ViewLive
-    ConfirmReset --> Dashboard
-    ConfirmSuspend --> Dashboard
-    
-    style Start fill:#4CAF50,stroke:#2E7D32,color:#fff
-    style Dashboard fill:#2196F3,stroke:#1565C0,color:#fff
-    style ShareLink fill:#FF9800,stroke:#EF6C00,color:#fff
-    style ViewLive fill:#9C27B0,stroke:#6A1B9A,color:#fff
-```
-
-### Student Workflow
-
-```mermaid
-graph TD
-    Start[📱 Open Attendance Link] --> LoadPage[Load Student Page]
-    LoadPage --> CheckSession{Valid Session?}
-    
-    CheckSession -->|No| Error[❌ Invalid/Expired Link]
-    CheckSession -->|Yes| EnterRoll[Enter Roll Number]
-    
-    EnterRoll --> CheckStatus{Check WebAuthn Status}
-    
-    CheckStatus -->|Not Enrolled| WebAuthnReg[🔐 WebAuthn Registration Flow]
-    CheckStatus -->|Enrolled| WebAuthnAuth[🔓 WebAuthn Authentication Flow]
-    
-    subgraph "WebAuthn Registration"
-        WebAuthnReg --> PromptBio[Browser Prompts: Face ID/Touch ID]
-        PromptBio --> StoreCred[Store Credential in DB]
-        StoreCred --> SuccessReg[✅ Biometric Enrolled]
-    end
-    
-    subgraph "WebAuthn Authentication"
-        WebAuthnAuth --> PromptBioAuth[Browser Prompts: Biometric Verification]
-        PromptBioAuth --> VerifyCounter[Verify Sign Counter]
-        VerifyCounter --> SuccessAuth{Verified?}
-        SuccessAuth -->|No| RetryAuth[Retry Authentication]
-        RetryAuth --> PromptBioAuth
-        SuccessAuth -->|Yes| ContinueFlow[Continue to Form]
-    end
-    
-    SuccessReg --> FillName[Fill Student Name]
-    FillName --> CapturePhoto[📷 Capture Photo]
-    
-    ContinueFlow --> CapturePhoto
-    
-    CapturePhoto --> EnableGPS[📍 Enable GPS Location]
-    EnableGPS --> ValidateGPS{Within Geofence?}
-    
-    ValidateGPS -->|No| ErrorGPS[❌ Too Far from Location<br/>Distance: XXX meters]
-    ValidateGPS -->|Yes| DetectFace{Face Detected?}
-    
-    DetectFace -->|No| ErrorFace[❌ No Face Detected<br/>Please Retake Photo]
-    DetectFace -->|Yes| CheckTOTP{TOTP Required?}
-    
-    CheckTOTP -->|Yes| EnterTOTP[Enter 6-digit TOTP Code]
-    CheckTOTP -->|No| SubmitAtt[✅ Submit Attendance]
-    
-    EnterTOTP --> ValidateTOTP{Valid TOTP?}
-    ValidateTOTP -->|No| ErrorTOTP[❌ Invalid Code]
-    ErrorTOTP --> EnterTOTP
-    ValidateTOTP -->|Yes| SubmitAtt
-    
-    SubmitAtt --> CheckDup{Already Submitted?}
-    CheckDup -->|Yes| ErrorDup[❌ Roll Number Already<br/>Submitted for This Session]
-    CheckDup -->|No| SaveRecord[💾 Save Attendance Record]
-    
-    SaveRecord --> UploadPhotoS3[☁️ Upload Photo to S3]
-    UploadPhotoS3 --> Success[🎉 Attendance Submitted<br/>Successfully!]
-    
-    style Start fill:#4CAF50,stroke:#2E7D32,color:#fff
-    style WebAuthnReg fill:#FF9800,stroke:#EF6C00,color:#fff
-    style WebAuthnAuth fill:#2196F3,stroke:#1565C0,color:#fff
-    style Success fill:#4CAF50,stroke:#2E7D32,color:#fff
-    style ErrorGPS fill:#F44336,stroke:#C62828,color:#fff
-    style ErrorFace fill:#F44336,stroke:#C62828,color:#fff
-```
-
----
-
-## Data Flow Architecture
+### Data Flow Architecture
 
 ```mermaid
 graph LR
     subgraph "Client Layer"
-        Browser[🌐 Browser]
-        Mobile[📱 Mobile Browser]
+        Browser[Browser]
+        Mobile[Mobile PWA]
     end
     
-    subgraph "CDN/Reverse Proxy"
-        Caddy[Caddy<br/>SSL Termination<br/>Gzip Compression]
+    subgraph "Reverse Proxy"
+        Caddy[Caddy SSL/Gzip]
     end
     
     subgraph "API Gateway"
-        RateLimit[Rate Limiter<br/>Admin: 100/15min<br/>Student: 20/min]
-        Auth[Auth Middleware<br/>JWT Validation]
+        RateLimit[Rate Limiter]
+        Auth[JWT Auth Middleware]
     end
     
     subgraph "Application Services"
-        SessionService[Session Service<br/>Token Generation<br/>TOTP Management]
-        AttendanceService[Attendance Service<br/>GPS Validation<br/>Photo Verification]
-        WebAuthnService[WebAuthn Service<br/>Credential Management<br/>Challenge Generation]
-        StorageService[Storage Service<br/>S3 Presigned URLs<br/>Cloudinary Upload]
+        SessionService[Session Service]
+        SecurityService[Integrity & GPS Validation]
+        AttendanceService[Attendance Service]
+        WebAuthnService[WebAuthn Service]
+        StorageService[Storage Service]
     end
     
     subgraph "Cache Layer"
-        Redis[Redis Cache<br/>Session Data<br/>Location Data<br/>TTL: 5 minutes]
+        Redis[Redis Cache]
     end
     
     subgraph "Data Layer"
-        MongoDB[(MongoDB<br/>Replica Set<br/>3 Nodes)]
+        MongoDB[(MongoDB Replica Set)]
     end
     
     subgraph "Storage Layer"
-        S3[(AWS S3<br/>Photo Storage<br/>Direct Upload)]
-        Cloudinary[(Cloudinary<br/>Image CDN<br/>Transformations)]
+        S3[(AWS S3 / Cloudinary)]
     end
     
     Browser -->|HTTPS| Caddy
     Mobile -->|HTTPS| Caddy
     Caddy --> RateLimit
     RateLimit --> Auth
+    
     Auth --> SessionService
-    Auth --> AttendanceService
     Auth --> WebAuthnService
     Auth --> StorageService
+    Auth --> SecurityService
+    SecurityService --> AttendanceService
     
     SessionService -->|Cache-Aside| Redis
     AttendanceService -->|Cache-Aside| Redis
@@ -321,105 +191,51 @@ graph LR
     WebAuthnService --> MongoDB
     
     StorageService -->|Presigned URLs| S3
-    StorageService -->|Upload API| Cloudinary
-    
-    style Redis fill:#dc382d,stroke:#a41e11,color:#fff
-    style MongoDB fill:#47a248,stroke:#2e6b2f,color:#fff
-    style S3 fill:#ff9900,stroke:#e68a00,color:#fff
-    style Caddy fill:#4a9eff,stroke:#0066cc,color:#fff
 ```
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Storage Options](#storage-options)
-- [Quick Start](#quick-start)
-- [WebAuthn Biometric Verification](#webauthn-biometric-verification)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Development](#development)
-- [Architecture](#architecture)
-- [Environment Variables](#environment-variables-reference)
-- [Security](#security-features)
-- [Testing](#testing)
-- [Scaling](#scaling)
-- [Hardware Requirements](#hardware-requirements)
-- [License](#license)
 
 ---
 
-## Features
+## Device Security & Integrity
 
-| Feature | Description |
-|---------|-------------|
-| **WebAuthn Biometric** | Face ID/Touch ID verification prevents impersonation |
-| **Geotag Verification** | Students must be within specified radius of location |
-| **Camera Capture** | Photo verification for each attendance submission |
-| **TOTP Security** | Time-based codes for session authentication |
-| **Device Fingerprinting** | Detects multi-device and suspicious activity |
-| **Short Links** | Easy-to-share session URLs with rotation support |
-| **Rotating Tokens** | Admin can rotate session links to prevent sharing |
-| **Duplicate Prevention** | Same roll number cannot submit twice per session |
-| **Real-time Stats** | Live attendance count with polling-based updates |
-| **Flagged Attendance** | Automatic flagging of suspicious submissions |
-| **NoSQL Performance** | MongoDB handles 1000+ concurrent submissions |
-| **Flexible Storage** | Choose between Cloudinary or AWS S3 |
-| **Direct Upload** | S3 presigned URLs for direct browser uploads |
-| **Docker Ready** | One-command deployment with docker-compose |
-| **CI/CD Pipeline** | GitHub Actions for automated testing and deployment |
+The system runs a multi-layered security pipeline to guarantee submission authenticity.
+
+### Client-Side Heuristics
+- **Pointer Event Verification**: Detects automated scripts by validating touch points versus user-agent declarations.
+- **Timing Manipulation**: Detects clock tampering by benchmarking standard computational loops against `performance.now()`.
+- **MediaPipe Verification**: Client-side ML models verify human facial presence before upload presigned URLs are generated.
+
+### Server-Side Middlewares
+- **Emulator Detection**: Analyzes WebGL renderer strings, canvas capabilities, and device memory signatures to flag Android/iOS emulators.
+- **GPS History Service**: Tracks sequential submissions to calculate travel speed. Submissions requiring impossible velocities (e.g., traveling 5km in 2 seconds) are flagged.
+- **Mock Location Detection**: Flags perfectly uniform coordinates or missing altitude/heading data typical of GPS spoofing applications.
 
 ---
 
-## Tech Stack
+## Workflows
 
-| Component | Technology |
-|-----------|------------|
-| **Backend** | Node.js + Express.js |
-| **Database** | MongoDB 7.0 |
-| **Biometric Auth** | WebAuthn (@simplewebauthn/server) |
-| **TOTP** | Custom implementation with SHA-256 |
-| **Image Storage** | Cloudinary OR AWS S3 (configurable) |
-| **Admin Panel** | React 18 + Vite |
-| **Student Page** | Vanilla JS (lightweight, mobile-optimized) |
-| **Authentication** | JWT with bcrypt password hashing |
-| **Testing** | Jest (269 tests) |
-| **Deployment** | Docker Compose |
+### Administrative Workflow
+1. **Infrastructure Setup**: Define physical locations via coordinates and radius.
+2. **Session Generation**: Initialize time-bound attendance sessions linked to a location.
+3. **Distribution**: Share securely generated short links or QR codes.
+4. **Monitoring**: Track real-time attendance influx via the session dashboard.
+5. **Security Review**: Investigate the Security Review panel for flagged anomalies. Filter sessions by date and location.
+6. **Verification**: Execute single or bulk verifications for legitimate records.
 
----
-
-## Storage Options
-
-The system supports two storage backends, configurable via `STORAGE_PROVIDER` environment variable.
-
-### Option 1: Cloudinary (Default)
-
-| Pros | Cons |
-|------|------|
-| Automatic image optimization | Images pass through backend server |
-| Built-in transformations | Slightly higher latency for large files |
-| Easy setup | Limited free tier bandwidth |
-| Free tier: 25GB storage + bandwidth | |
-
-### Option 2: AWS S3
-
-| Pros | Cons |
-|------|------|
-| Direct browser-to-S3 upload (presigned URLs) | Requires AWS account setup |
-| Lower backend load | Need to configure CORS on bucket |
-| Better for high-volume uploads | |
-| Pay only for what you use | |
+### Student Workflow
+1. **Access**: Open the shared short-link via a mobile device.
+2. **Authentication**: Input roll number and complete hardware WebAuthn biometric verification.
+3. **Capture**: Grant camera permissions, center face for MediaPipe detection, and capture live photo.
+4. **Geolocation**: Grant location permissions to establish geofence compliance.
+5. **Submission**: Submit payload. Background integrity checks execute silently.
 
 ---
 
-## Quick Start
+## Installation & Deployment
 
 ### Prerequisites
-
 - Docker and Docker Compose
-- Node.js 22+ (for local development)
-- Cloudinary account (free tier available) OR AWS account with S3 access
+- Node.js 22.x (For local development without containers)
+- AWS S3 compatible storage (or Cloudinary)
 
 ### Automated Setup (Recommended)
 
@@ -440,83 +256,55 @@ chmod +x setup.sh
 ```
 
 **Setup Script Features:**
-- ✅ Cross-platform support (Linux Ubuntu/Debian & macOS Intel/Apple Silicon)
-- ✅ Installs Docker & Docker Compose (if not present)
-- ✅ Installs Node.js 22 LTS via NVM (if not present)
-- ✅ Detects existing versions and warns without overwriting
-- ✅ Installs project dependencies
-- ✅ Creates .env file from .env.example
-- ✅ Interactive menu and CLI options
+- Cross-platform support (Linux Ubuntu/Debian & macOS Intel/Apple Silicon)
+- Installs Docker & Docker Compose (if not present)
+- Installs Node.js 22 LTS via NVM (if not present)
+- Detects existing versions and warns without overwriting
+- Installs project dependencies
+- Creates .env file from .env.example
+- Interactive menu and CLI options
 
-### 1. Clone and Configure
+### Quick Start via Docker
 
+1. Clone the repository and configure the environment:
 ```bash
 git clone <repository-url>
 cd Attendence-GEOTAG-System
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials:
+2. Configure primary environment variables within `.env`:
+```env
+# Infrastructure
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=mongodb://mongo:27017/attendance
+REDIS_URL=redis://redis:6379
 
-**For Cloudinary:**
-```bash
-STORAGE_PROVIDER=cloudinary
-JWT_SECRET=your-secret-key
-ADMIN_SECRET=your-admin-secret
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
+# Secrets
+JWT_SECRET=your_secure_jwt_secret
+ADMIN_SECRET=your_secure_admin_secret
 
-# WebAuthn Configuration
-WEBAUTHN_RP_NAME=Your Institution Name
-WEBAUTHN_RP_ID=localhost
-WEBAUTHN_ORIGIN=http://localhost:5000
-```
-
-**For AWS S3:**
-```bash
+# Storage (S3 Configuration)
 STORAGE_PROVIDER=s3
-JWT_SECRET=your-secret-key
-ADMIN_SECRET=your-admin-secret
 AWS_S3_BUCKET=your-bucket-name
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 
-# WebAuthn Configuration
-WEBAUTHN_RP_NAME=Your Institution Name
+# WebAuthn
+WEBAUTHN_RP_NAME=Corporate Identity Provider
 WEBAUTHN_RP_ID=your-domain.com
 WEBAUTHN_ORIGIN=https://your-domain.com
 ```
 
-### 2. S3 CORS Configuration (Required for S3 only)
-
-```json
-[
-  {
-    "AllowedOrigins": ["*"],
-    "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
-```
-
-### 3. Run with Docker Compose
-
+3. Deploy the stack:
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
+This commands provisions the Backend API, Admin Frontend, Student PWA, MongoDB Replica Set, Redis cache, and the entire Prometheus/Grafana observability stack.
 
-This starts:
-- MongoDB on port 27017
-- Backend API on port 5000
-- Admin panel on port 3000
-- Student page on port 8080
-
-### 4. Create Admin Account
-
+4. Create Admin Account:
 ```bash
 curl -X POST http://localhost:5000/api/admin/register \
   -H "Content-Type: application/json" \
@@ -528,604 +316,69 @@ curl -X POST http://localhost:5000/api/admin/register \
   }'
 ```
 
-### 5. Access the Application
+---
 
-| Interface | URL |
-|-----------|-----|
-| Admin Panel | http://localhost:3000 |
-| Student Page | http://localhost:8080 |
-| API Health | http://localhost:5000/health |
+## Observability
+
+The project includes an embedded telemetry stack for production monitoring.
+
+- **Prometheus**: Scrapes application metrics (CPU usage, memory heap, request latency, concurrent active sessions) on port `:9090`.
+- **Grafana**: Pre-configured dashboards visualizing API health, anomaly detection rates, and system integrity scores, accessible on port `:3001`.
+- **Loki & Promtail**: Aggregates application logs, streamlining debugging and security audits. Configured to persist logs to the unified S3 bucket.
 
 ---
 
-## WebAuthn Biometric Verification
+## API Documentation
 
-### Overview
+The REST API utilizes standard HTTP verbs and JSON payloads. Admin routes require a Bearer JWT.
 
-The system supports WebAuthn-based biometric authentication using platform authenticators (Face ID, Touch ID, Windows Hello, Android fingerprint). This adds a strong security layer to prevent impersonation.
-
-### How It Works
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                    Student Enrollment Flow                        │
-├──────────────────────────────────────────────────────────────────┤
-│  1. Student enters roll number                                   │
-│  2. System checks if already enrolled                            │
-│  3. If not enrolled → Registration flow                          │
-│     - Browser prompts for biometric (Face ID/Touch ID)           │
-│     - Credential stored with student ID                          │
-│  4. If enrolled → Authentication flow                            │
-│     - Browser prompts for biometric verification                  │
-│     - Session counter checked for replay attacks                 │
-│  5. After biometric success → Complete attendance form           │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Security Features
-
-| Feature | Implementation |
-|---------|---------------|
-| **Platform Authenticator Only** | No USB keys, only built-in biometrics |
-| **User Verification Required** | Must use biometric or device PIN |
-| **Sign Counter Tracking** | Detects credential cloning attacks |
-| **Challenge Expiry** | 5-minute TTL prevents replay attacks |
-| **Admin Rate Limiting** | Alert on >10 resets per hour |
-| **Audit Logging** | All admin actions logged with reason |
-
-### Admin Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/admin/webauthn/reset` | Reset student credential |
-| POST | `/api/admin/webauthn/suspend` | Suspend credential (with reason) |
-| POST | `/api/admin/webauthn/unsuspend` | Reactivate suspended credential |
-| GET | `/api/admin/webauthn/credentials` | List all credentials (paginated) |
-| GET | `/api/admin/webauthn/stats` | Enrollment statistics |
+### Administrative Endpoints
+- `POST /api/admin/login` - Issue JWT for administrative access.
+- `POST /api/admin/locations` - Provision a new geofenced location.
+- `POST /api/admin/sessions` - Initialize an attendance session.
+- `GET /api/admin/sessions/:id/security-flags` - Retrieve aggregated anomaly metrics for a session.
+- `PUT /api/admin/attendance/verify/bulk` - Execute bulk verification state changes.
 
 ### Student Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/s/:shortCode/webauthn/status/:rollNumber` | Check enrollment status |
-| POST | `/s/:shortCode/webauthn/register/start` | Begin registration |
-| POST | `/s/:shortCode/webauthn/register/finish` | Complete registration |
-| POST | `/s/:shortCode/webauthn/authenticate/start` | Begin authentication |
-| POST | `/s/:shortCode/webauthn/authenticate/finish` | Complete with attendance |
-
-### Production Configuration
-
-For production deployment, WebAuthn requires HTTPS:
-
-```bash
-WEBAUTHN_RP_NAME=Your Institution Name
-WEBAUTHN_RP_ID=your-domain.com
-WEBAUTHN_ORIGIN=https://your-domain.com
-```
-
-> **Note:** WebAuthn works on `localhost` for testing without HTTPS. In production, valid SSL certificate is required.
+- `POST /s/:shortCode/webauthn/register/start` - Initiate hardware biometric registration.
+- `POST /s/:shortCode/webauthn/auth/finish` - Conclude biometric verification.
+- `POST /api/attend/:token/upload-url` - Request an S3 presigned URL for direct image upload.
+- `POST /api/attend/:token` - Finalize attendance submission containing GPS coordinates and photo references.
 
 ---
 
-## Usage
+## Development Guide
 
-### Admin Workflow
+### Local Development Setup
 
-1. **Create Location**
-   - Name: e.g., "Main Lecture Hall"
-   - GPS coordinates (use Google Maps)
-   - Radius: Geofence size in meters (default: 100m)
+To run the application services directly on the host machine:
 
-2. **Create Session**
-   - Select location
-   - Set duration (default: 30 minutes)
-   - Optionally enable TOTP for additional security
-   - System generates unique short link
-
-3. **Share Link**
-   - Copy link from session creation modal
-   - Share via email/LMS/messaging
-   - Display QR code for scanning
-
-4. **Monitor Attendance**
-   - View live stats
-   - See verified/unverified students
-   - Review flagged submissions
-   - Manage WebAuthn credentials
-   - Export to CSV
-
-5. **Handle Issues**
-   - Reset biometric credentials for students who lost devices
-   - Suspend credentials for suspicious accounts
-   - Rotate token if link gets shared
-
-### Student Workflow
-
-1. Open attendance link on mobile device
-2. Enter roll number
-3. **If first time:**
-   - Complete biometric enrollment (Face ID/Touch ID)
-   - Fill name
-   - Capture photo
-   - Enable GPS
-   - Submit attendance
-4. **If returning:**
-   - Complete biometric verification
-   - Capture new photo
-   - Submit attendance
-
----
-
-## API Endpoints
-
-### Admin Endpoints (JWT Protected)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/admin/register` | Create admin (requires adminSecret) |
-| POST | `/api/admin/login` | Login and get JWT token |
-| POST | `/api/admin/locations` | Create location |
-| GET | `/api/admin/locations` | List all locations |
-| PUT | `/api/admin/locations/:id` | Update location |
-| DELETE | `/api/admin/locations/:id` | Delete location |
-| POST | `/api/admin/sessions` | Create session |
-| GET | `/api/admin/sessions` | List all sessions |
-| GET | `/api/admin/sessions/:id` | Get session details |
-| POST | `/api/admin/sessions/:id/rotate` | Rotate session token |
-| POST | `/api/admin/sessions/:id/deactivate` | Deactivate session |
-| GET | `/api/admin/sessions/:id/attendance` | Get attendance records |
-| GET | `/api/admin/sessions/:id/stats` | Get session statistics |
-| GET | `/api/admin/sessions/:id/totp` | Get TOTP code |
-| POST | `/api/admin/shortlinks` | Create short link |
-| GET | `/api/admin/shortlinks` | List short links |
-| POST | `/api/admin/shortlinks/:code/attach` | Attach link to session |
-| DELETE | `/api/admin/shortlinks/:code` | Delete short link |
-| POST | `/api/admin/webauthn/reset` | Reset biometric credential |
-| POST | `/api/admin/webauthn/suspend` | Suspend credential |
-| GET | `/api/admin/webauthn/credentials` | List credentials |
-| GET | `/api/admin/webauthn/stats` | Enrollment statistics |
-
-### Student Endpoints (Short Link Token)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/s/:shortCode` | Redirect to student page |
-| GET | `/s/:shortCode/info` | Get TOTP code |
-| GET | `/s/:shortCode/session` | Get session info |
-| GET | `/s/:shortCode/webauthn/status/:roll` | Check enrollment |
-| POST | `/s/:shortCode/webauthn/register/start` | Begin registration |
-| POST | `/s/:shortCode/webauthn/register/finish` | Complete registration |
-| POST | `/s/:shortCode/webauthn/auth/start` | Begin authentication |
-| POST | `/s/:shortCode/webauthn/auth/finish` | Complete with attendance |
-
----
-
-## Development
-
-### Backend
-
+#### Backend
 ```bash
 cd backend
 npm install
-npm run dev        # Development with hot reload
-npm test           # Run tests (269 tests)
-npm run test:watch # Watch mode
-npm run lint       # Run ESLint
-npm run lint:fix   # Fix linting issues
+npm run dev
 ```
 
-### Admin Frontend
-
+#### Admin Frontend
 ```bash
 cd frontend/admin
 npm install
-npm run dev        # Development server (port 5173)
-npm run build      # Production build
-npm run preview    # Preview production build
+npm run dev
 ```
 
-### Student Page
-
+#### Testing
+The system maintains a comprehensive suite of unit and integration tests using Jest and Vitest.
 ```bash
-cd frontend/student/public
-npx serve -p 8080
+# Run backend tests
+cd backend && npm test
+
+# Run student frontend integration tests
+cd frontend/student && npm test
 ```
-
----
-
-## Security Architecture
-
-### Request Flow (with WebAuthn)
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Student Attendance Flow                         │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Student opens short link                                        │
-│  2. GET /s/:shortCode → Redirect to student-scan.html               │
-│  3. Enter roll number → GET webauthn/status                         │
-│  4. If not enrolled:                                                 │
-│     - POST webauthn/register/start → Get challenge                  │
-│     - Browser prompts for biometric                                 │
-│     - POST webauthn/register/finish → Store credential              │
-│  5. If enrolled:                                                     │
-│     - POST webauthn/authenticate/start → Get challenge              │
-│     - Browser prompts for biometric                                 │
-│     - POST webauthn/authenticate/finish → Verify + Submit           │
-│  6. Photo capture, GPS check, Attendance saved                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Database Schema
-
-```
-Admins
-  |-- username (unique)
-  |-- email (unique)
-  |-- password (bcrypt hashed)
-  |-- role
-
-Locations
-  |-- name
-  |-- latitude, longitude
-  |-- radiusMeters
-  |-- createdBy (ref: Admin)
-
-Sessions
-  |-- locationId (ref: Location)
-  |-- tokenHash (SHA-256, unique)
-  |-- tokenPrefix (first 8 chars)
-  |-- expiresAt (TTL index)
-  |-- isActive
-  |-- totpEnabled
-  |-- totpSecret (encrypted)
-  |-- totpWindowSeconds
-
-ShortLinks
-  |-- shortCode (unique, lowercase)
-  |-- sessionId (ref: Session)
-  |-- createdBy (ref: Admin)
-  |-- clickCount
-  |-- isActive
-
-Attendance
-  |-- sessionId (ref: Session)
-  |-- rollNumber (unique per session)
-  |-- studentName
-  |-- photoUrl, photoPublicId
-  |-- studentLatitude, studentLongitude
-  |-- distanceFromLocation
-  |-- verified (boolean)
-  |-- webauthnCredentialId (ref: WebAuthnCredential)
-  |-- webauthnVerified (boolean)
-  |-- webauthnDeviceType
-  |-- webauthnCounter
-  |-- flagged (boolean)
-  |-- capturedAt
-
-WebAuthnCredential
-  |-- studentId (unique)
-  |-- credentialId (unique)
-  |-- publicKey (Buffer)
-  |-- counter (sign count for replay detection)
-  |-- deviceLabel
-  |-- transports
-  |-- aaguid (authenticator model)
-  |-- isSuspended
-  |-- suspendedReason
-  |-- enrolledAt
-  |-- lastUsedAt
-
-WebAuthnChallenge
-  |-- studentId
-  |-- challenge
-  |-- type (registration/authentication)
-  |-- sessionId
-  |-- used (boolean)
-  |-- expiresAt (TTL: 5 minutes)
-
-Device
-  |-- fingerprintHash (SHA-256)
-  |-- boundToStudent
-  |-- sessionId
-  |-- attendanceCount
-  |-- flags[] (MULTI_STUDENT_DEVICE, etc.)
-  |-- deviceFirstSeen
-
-Flag
-  |-- type
-  |-- sessionId
-  |-- attendanceId
-  |-- reason
-  |-- isRead
-  |-- createdAt
-```
-
----
-
-## Environment Variables Reference
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `STORAGE_PROVIDER` | Storage backend: 'cloudinary' or 's3' | No | cloudinary |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | If cloudinary | - |
-| `CLOUDINARY_API_KEY` | Cloudinary API key | If cloudinary | - |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret | If cloudinary | - |
-| `AWS_S3_BUCKET` | S3 bucket name | If s3 | - |
-| `AWS_REGION` | AWS region | No | us-east-1 |
-| `AWS_ACCESS_KEY_ID` | AWS access key | If s3 | - |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | If s3 | - |
-| `JWT_SECRET` | JWT signing secret | Yes | - |
-| `JWT_EXPIRE` | JWT expiration time | No | 7d |
-| `ADMIN_SECRET` | Secret for admin creation | Yes | - |
-| `MONGODB_URI` | MongoDB connection string | No | mongodb://localhost:27017/attendance-geotag |
-| `WEBAUTHN_RP_NAME` | WebAuthn relying party name | No | Attendance System |
-| `WEBAUTHN_RP_ID` | WebAuthn relying party ID (domain) | No | localhost |
-| `WEBAUTHN_ORIGIN` | WebAuthn origin URL | No | http://localhost:5000 |
-| `NGROK_AUTHTOKEN` | Ngrok auth token | Optional | - |
-| `NGROK_DOMAIN` | Ngrok domain | Optional | - |
-
----
-
-## Security Features
-
-| Feature | Implementation |
-|---------|---------------|
-| **Biometric Verification** | WebAuthn with platform authenticators |
-| **Replay Attack Prevention** | Sign counter tracking |
-| **Challenge Expiry** | 5-minute TTL for WebAuthn challenges |
-| **Token Hashing** | Session tokens stored as SHA-256 hashes |
-| **JWT Authentication** | Admin routes protected with JWT |
-| **Password Hashing** | bcrypt with 10 salt rounds |
-| **Rate Limiting** | Admin: 100/15min, Student: 20/min, Login: 5/15min |
-| **Input Validation** | express-validator on all inputs |
-| **CORS** | Configurable origins |
-| **Security Headers** | Helmet middleware |
-| **S3 Presigned URLs** | Time-limited (5 min) upload URLs |
-| **MongoDB Injection** | Mongoose sanitization |
-| **Device Fingerprinting** | Detect suspicious device activity |
-| **Admin Audit Trail** | All credential changes logged |
-
----
-
-## Testing
-
-### Test Coverage
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| WebAuthn Flow | 66 | ✅ Passing |
-| TOTP Utilities | 15 | ✅ Passing |
-| ShortLink API | 25 | ✅ Passing |
-| Device Model | 8 | ✅ Passing |
-| Session/TOTP | 12 | ✅ Passing |
-| Models | 28 | ✅ Passing |
-| Middleware | 38 | ✅ Passing |
-| Attendance | 45 | ✅ Passing |
-| Security | 12 | ✅ Passing |
-| **Total** | **269** | **✅ 100% Passing** |
-
-### Running Tests
-
-```bash
-# Backend tests
-cd backend
-npm test                    # Run all tests
-npm test -- --coverage      # With coverage report
-npm test -- tests/webauthn  # WebAuthn tests only
-
-# Frontend tests
-cd frontend/admin
-npm test
-```
-
-### CI/CD Pipeline
-
-GitHub Actions workflow includes:
-- Backend lint and test
-- Frontend lint and build
-- Security scanning with CodeQL
-- Docker image build and push
-
----
-
-## Scaling
-
-### For 1000+ Concurrent Users
-
-| Optimization | Implementation |
-|--------------|----------------|
-| MongoDB Connection Pooling | 300 max connections |
-| Database Indexing | Unique index on `{sessionId, rollNumber}` |
-| S3 Direct Upload | Reduces backend load significantly |
-| Cloudinary CDN | Images served from global CDN |
-| Rate Limiting | Prevents abuse |
-| WebAuthn Challenge TTL | Auto-expiry prevents accumulation |
-
-### Performance Metrics
-
-| Metric | Value |
-|--------|-------|
-| Max RPS (backend) | ~150-250 |
-| Photo upload latency (S3) | 200-400ms |
-| Photo upload latency (Cloudinary) | 500-1500ms |
-| WebAuthn verification | 100-300ms |
-| MongoDB query time | <10ms (indexed) |
-| Token validation | <5ms |
-
----
-
-## Hardware Requirements
-
-### Minimum (1,000 students)
-
-| Component | Specification |
-|-----------|---------------|
-| CPU | 2 vCPUs (t3.medium) |
-| RAM | 4GB |
-| Storage | 20GB SSD |
-| MongoDB | Atlas M10 or 2GB self-hosted |
-| Estimated Cost | ~$87/month |
-
-### Recommended Production (5,000 students)
-
-| Component | Specification |
-|-----------|---------------|
-| CPU | 4 vCPUs (c5.large) |
-| RAM | 8GB |
-| Storage | 50GB SSD |
-| MongoDB | Atlas M20 |
-| Estimated Cost | ~$150/month |
-
----
-
-## Project Structure
-
-```
-Attendence-GEOTAG-System/
-|-- .github/
-|   `-- workflows/
-|       |-- ci.yml              # CI/CD pipeline
-|       `-- codeql.yml          # Security scanning
-|
-|-- backend/
-|   |-- src/
-|   |   |-- config/             # Configuration files
-|   |   |-- controllers/        # Route controllers
-|   |   |-- middleware/         # Auth, validation, rate limiting
-|   |   |-- models/             # Mongoose models
-|   |   |-- routes/             # Express routes
-|   |   |-- storage/            # Storage providers (Cloudinary, S3)
-|   |   |-- utils/              # Utility functions (WebAuthn, TOTP)
-|   |   `-- server.js           # Entry point
-|   |-- tests/                  # Test files (269 tests)
-|   |-- jest.config.js
-|   |-- jest.setup.js
-|   `-- package.json
-|
-|-- frontend/
-|   |-- admin/                  # React admin panel
-|   |   |-- src/
-|   |   |   |-- components/     # React components
-|   |   |   |-- context/        # Auth context
-|   |   |   |-- pages/          # Page components
-|   |   |   `-- index.css       # Global styles
-|   |   |-- public/
-|   |   `-- package.json
-|   |
-|   `-- student/                # Static student page
-|       `-- public/
-|           `-- student-scan.html
-|
-|-- docker-compose.yml
-|-- .env.example
-|-- HardwareRequirements.md
-`-- README.md
-```
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit changes: `git commit -am 'Add my feature'`
-4. Push to branch: `git push origin feature/my-feature`
-5. Submit a pull request
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Docker Compose Configurations
-
-### Development vs Production
-
-This project uses **two Docker Compose files** that work together:
-
-#### **docker-compose.yml** (Base Configuration - Production)
-
-The main configuration for **production deployment** with full scaling:
-
-```yaml
-Services:
-- Backend: 3 replicas with PM2 clustering (6 workers total)
-- MongoDB: 3-node replica set (Primary + Secondary + Arbiter)
-- Redis: 512MB cache with LRU eviction
-- Caddy: Load balancer with automatic HTTPS
-- Frontend: Optimized production builds
-```
-
-**When to use:**
-- Production deployment
-- Load testing with 1000+ users
-- High availability setup
-
-#### **docker-compose.override.yml** (Development Overrides)
-
-**Automatically applied** when running `docker-compose up`. Simplifies development:
-
-```yaml
-Services:
-- Backend: 1 replica (easier debugging)
-- Volume mounts: Hot reload enabled
-- No PM2: Standard Node.js process
-- Faster builds: Uses standard Dockerfile
-```
-
-**Key Differences:**
-
-| Feature | Production (Base) | Development (Override) |
-|---------|-------------------|------------------------|
-| Backend Replicas | 3 | 1 |
-| PM2 Workers | 2 per container | None |
-| Hot Reload | ❌ No | ✅ Yes (volume mounts) |
-| MongoDB Nodes | 3 (replica set) | 3 (replica set) |
-| Build Time | Slower (PM2) | Faster (standard) |
-| Debugging | Harder | Easier |
-
-**How to Use:**
-
-```bash
-# Development (automatic - both files merge)
-docker-compose up -d
-
-# Production (explicit - base only)
-docker-compose -f docker-compose.yml up -d --build
-
-# Or set environment variable
-export COMPOSE_FILE=docker-compose.yml
-docker-compose up -d
-```
-
-**Override File Contents:**
-
-```yaml
-services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile        # Standard Dockerfile (no PM2)
-    deploy:
-      replicas: 1                    # Single replica
-    environment:
-      - NODE_ENV=development
-      - MONGODB_URI=mongodb://mongo1:27017/attendance-geotag
-      - REDIS_URL=redis://redis:6379
-    volumes:
-      - ./backend/src:/app/src:ro   # Hot reload
-```
-
-**Benefits:**
-
-1. **No configuration needed** - Just run `docker-compose up` for development
-2. **Production-ready by default** - Base file has all optimizations
-3. **Easy debugging** - Single backend instance with logs
-4. **Fast iteration** - Volume mounts for instant code changes
-5. **Clean separation** - Dev and prod configs are isolated
-
----
+This project is licensed under the MIT License. Please review the `LICENSE` file in the repository root for details.
