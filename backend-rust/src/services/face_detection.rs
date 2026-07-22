@@ -34,35 +34,30 @@ pub struct Landmark {
 static FACE_ANALYZER: OnceCell<Option<face_id::analyzer::FaceAnalyzer>> = OnceCell::new();
 
 async fn get_face_analyzer() -> Option<&'static face_id::analyzer::FaceAnalyzer> {
-    FACE_ANALYZER
-        .get_or_init(|| {
-            match tokio::runtime::Handle::try_current() {
-                Ok(rt) => {
-                    let result = rt.block_on(async {
-                        match face_id::analyzer::FaceAnalyzer::from_hf()
-                            .detector_score_threshold(0.5)
-                            .build()
-                            .await
-                        {
-                            Ok(analyzer) => {
-                                info!("Face detection ML model (SCRFD via ONNX Runtime) loaded successfully");
-                                Some(analyzer)
-                            }
-                            Err(e) => {
-                                warn!("Failed to load face detection ML model: {}. Falling back to basic detection.", e);
-                                None
-                            }
-                        }
-                    });
-                    result
-                }
-                Err(_) => {
-                    warn!("No tokio runtime available for face detection initialization");
-                    None
-                }
-            }
-        })
-        .as_ref()
+    if let Some(analyzer) = FACE_ANALYZER.get() {
+        return analyzer.as_ref();
+    }
+
+    let analyzer = match face_id::analyzer::FaceAnalyzer::from_hf()
+        .detector_score_threshold(0.5)
+        .build()
+        .await
+    {
+        Ok(analyzer) => {
+            info!("Face detection ML model (SCRFD via ONNX Runtime) loaded successfully");
+            Some(analyzer)
+        }
+        Err(e) => {
+            warn!(
+                "Failed to load face detection ML model: {}. Falling back to basic detection.",
+                e
+            );
+            None
+        }
+    };
+
+    let _ = FACE_ANALYZER.set(analyzer);
+    FACE_ANALYZER.get().and_then(|a| a.as_ref())
 }
 
 pub fn init_face_detector() {
