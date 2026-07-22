@@ -1,0 +1,8 @@
+mod admin_register_tests;
+mod attendance_tests;
+mod client_log_tests;
+mod config_tests;
+mod export_tests;
+mod totp_tests;
+mod verification_tests;
+mod webauthn_tests;
