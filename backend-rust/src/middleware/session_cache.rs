@@ -154,8 +154,11 @@ impl SessionCache {
             if let Ok(mut conn) = redis_client.get_multiplexed_async_connection().await {
                 let pattern = format!("{}*", SESSION_CACHE_PREFIX);
                 if let Ok(keys) = redis::cmd("KEYS").arg(&pattern).query_async::<Vec<String>>(&mut conn).await {
-                    for key in keys {
-                        let _: Result<(), _> = conn.del(&key).await;
+                    if !keys.is_empty() {
+                        let _: Result<(), _> = redis::cmd("DEL")
+                            .arg(&keys)
+                            .query_async(&mut conn)
+                            .await;
                     }
                 }
             }
