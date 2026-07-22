@@ -19,7 +19,7 @@ use crate::{
     models::{
         Attendance, AttendanceDeviceFlag, Device, EmulatorFlag, EmulatorFlagType,
         GpsAnomaly, GpsAnomalyType, GpsConfidence, IntegrityCheck, IntegrityCheckType,
-        Location, PhotoHash, Session,
+        Location, PhotoHash, Session, WebAuthnCredential,
     },
     services::{compute_image_hash, detect_faces, GpsPositionEntry, IpInfo},
     utils::{calculate_distance, is_same_photo},
@@ -336,7 +336,29 @@ pub async fn submit_attendance(
     }
 
     let roll_upper = payload.roll_number.to_uppercase();
+
+    // Check WebAuthn credential enrollment time for grace period
+    let webauthn_credentials: Collection<WebAuthnCredential> = state.db.database(db_name).collection(WebAuthnCredential::collection_name());
     
+    let webauthn_required = if let Some(credential) = webauthn_credentials
+        .find_one(doc! { "studentId": &roll_upper })
+        .await?
+    {
+        // Grace period: 15 minutes after enrollment
+        let enrolled_at = credential.enrolled_at;
+        let grace_period_end = enrolled_at + chrono::Duration::minutes(15);
+        
+        Utc::now() >= grace_period_end
+    } else {
+        false // No credential, no WebAuthn required
+    };
+
+    if webauthn_required && !payload.webauthn_verified.unwrap_or(false) {
+        return Err(AppError::Forbidden(
+            "Security policy requires biometric authentication. Please use your enrolled device.".to_string()
+        ));
+    }
+
     let existing = attendances
         .find_one(doc! { "sessionId": session.id.unwrap(), "rollNumber": &roll_upper })
         .await?;
