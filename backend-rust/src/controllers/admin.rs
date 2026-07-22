@@ -16,6 +16,7 @@ use crate::{
         generate_token, AuthenticatedAdmin,
     },
     models::{Admin, AdminLogin, AdminRegistration, Attendance, Batch, Location, Session},
+    utils::generate_qr_token,
 };
 
 #[derive(Debug, Serialize)]
@@ -435,7 +436,7 @@ pub async fn get_dashboard_stats(
     let sessions_collection: Collection<Session> = db.collection(Session::collection_name());
     let attendance_collection: Collection<Attendance> = db.collection(Attendance::collection_name());
     let batches_collection: Collection<Batch> = db.collection(Batch::collection_name());
-    let locations_collection: Collection<Location> = db.collection(Location::collection_name());
+    let _locations_collection: Collection<Location> = db.collection(Location::collection_name());
 
     // Build session filter query
     let mut session_filter = doc! { "createdBy": auth.id };
@@ -493,7 +494,7 @@ pub async fn get_dashboard_stats(
 
     // If no sessions exist, return default zeroed payload
     if session_ids.is_empty() {
-        let system_health = crate::services::system_health::get_system_health(&state.db, state.redis.as_ref()).await?;
+        let system_health = crate::services::system_health::get_system_health(&state.db, state.redis.as_ref(), &state.storage).await?;
         let health_score = system_health.overall_score as i64;
         let health_status = if health_score >= 85 { "On Track" } else if health_score >= 50 { "At Risk" } else { "Critical" };
         let health_status_lower = if health_score >= 85 { "healthy" } else if health_score >= 50 { "degraded" } else { "unhealthy" };
@@ -619,7 +620,7 @@ pub async fn get_dashboard_stats(
 
     // Get batch session counts for expected checkins calculation
     let mut batch_session_counts: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    for (session_id, batch_id_opt) in &session_batch_map {
+    for (_session_id, batch_id_opt) in &session_batch_map {
         if let Some(batch_id) = batch_id_opt {
             let key = batch_id.to_hex();
             *batch_session_counts.entry(key).or_insert(0) += 1;
@@ -842,7 +843,7 @@ pub async fn get_dashboard_stats(
     low_batches.truncate(5);
 
     // System health
-    let system_health = crate::services::system_health::get_system_health(&state.db, state.redis.as_ref()).await?;
+    let system_health = crate::services::system_health::get_system_health(&state.db, state.redis.as_ref(), &state.storage).await?;
     let health_score = system_health.overall_score as i64;
     let health_status = if health_score >= 85 { "On Track" } else if health_score >= 50 { "At Risk" } else { "Critical" };
     let health_status_lower = if health_score >= 85 { "healthy" } else if health_score >= 50 { "degraded" } else { "unhealthy" };
@@ -949,7 +950,7 @@ pub async fn get_system_health(
 ) -> Result<impl IntoResponse> {
     use crate::services::system_health::get_system_health as check_system_health;
 
-    let health = check_system_health(&state.db, state.redis.as_ref()).await?;
+    let health = check_system_health(&state.db, state.redis.as_ref(), &state.storage).await?;
     Ok(Json(health))
 }
 
@@ -1508,6 +1509,8 @@ pub async fn get_session_stats(
 pub struct TOTPResponse {
     pub session_id: String,
     pub totp_code: Option<String>,
+    #[serde(rename = "qrToken")]
+    pub qr_token: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub window_seconds: Option<i64>,
     pub session_active: bool,
@@ -1540,11 +1543,20 @@ pub async fn get_session_totp(
         .await?
         .ok_or_else(|| AppError::NotFound("Session not found".to_string()))?;
 
+    // Generate QR token for anti-sharing using session ID hex and totp_secret
+    let qr_token = if let Some(ref totp_secret) = session.totp_secret {
+        let session_hex = session_id.to_hex();
+        Some(generate_qr_token(&session_hex, totp_secret))
+    } else {
+        None
+    };
+
     Ok(Json(TOTPResponse {
         session_id: id,
         totp_code: session.totp_secret,
+        qr_token,
         expires_at: Some(session.expires_at),
-        window_seconds: Some(30),
+        window_seconds: Some(4), // 4 seconds validity window for QR token
         session_active: session.is_active,
     }))
 }
