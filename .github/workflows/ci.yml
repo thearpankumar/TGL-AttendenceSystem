@@ -13,6 +13,9 @@ jobs:
     defaults:
       run:
         working-directory: backend-rust
+    env:
+      RUSTC_WRAPPER: "sccache"
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       - name: Checkout code
@@ -22,6 +25,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -39,7 +45,9 @@ jobs:
           CARGO_INCREMENTAL: 0
 
       - name: Run tests
-        run: cargo nextest run --locked
+        run: |
+          cargo nextest run --locked --all-features
+          cargo test --doc --locked --all-features
         env:
           CARGO_INCREMENTAL: 0
 
