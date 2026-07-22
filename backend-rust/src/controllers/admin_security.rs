@@ -51,10 +51,25 @@ pub async fn get_security_summary(
         .count_documents(doc! { "sessionId": session_oid, "flagged": true, "flagReviewed": false })
         .await?;
 
+    // Count GPS anomalies with high severity using aggregation pipeline
+    let pipeline = vec![
+        doc! { "$match": { "sessionId": session_oid, "flagged": true } },
+        doc! { "$unwind": "$gpsAnomalies" },
+        doc! { "$match": { "gpsAnomalies.severity": "high" } },
+        doc! { "$count": "count" },
+    ];
+
+    let mut cursor = attendances.aggregate(pipeline).await?;
+    let mut high_severity = 0i64;
+    while cursor.advance().await? {
+        let doc = cursor.deserialize_current()?;
+        high_severity = doc.get_i64("count").unwrap_or(0);
+    }
+
     Ok(Json(SecuritySummary {
         total_flagged: total_flagged as i64,
         unreviewed: unreviewed as i64,
-        high_severity: 0,
+        high_severity,
     }))
 }
 
