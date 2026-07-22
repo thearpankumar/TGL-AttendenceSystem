@@ -43,6 +43,9 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+.opencode/*
+.planning/*
+
 
 # OS generated files
 .DS_Store
@@ -90,3 +93,12 @@ uploads/
 # Generated during npm install
 public/wasm/
 public/models/blaze_face_short_range.tflite
+
+# Rust / Cargo
+/target/
+**/target/
+**/*.rs.bk
+*.rs.bk
+cargo-timing.html
+.cargo/config.toml.local
+

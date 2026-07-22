@@ -3,12 +3,20 @@
 # app work here never has the DB/proxy config in view) — always run all
 # three together:
 #   docker compose -f docker-compose.prod.yml -f docker-compose.mongo.yml -f docker-compose.caddy.yml up -d --build
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
 
   redis:
     image: redis:7-alpine
     container_name: attendance-redis
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-redis_secure_password}
     expose:
       - "6379"
@@ -29,6 +37,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5000
@@ -89,6 +98,7 @@ services:
       args:
         VITE_BASE_PATH: /owner-of-attendix-xyz/
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       replicas: 3
       resources:
@@ -110,6 +120,7 @@ services:
       args:
         VITE_BYPASS_MOBILE_CHECK: ${VITE_BYPASS_MOBILE_CHECK:-false}
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       replicas: 3
       resources:
@@ -129,6 +140,7 @@ services:
     build:
       context: ./frontend/home
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       replicas: 3
       resources:
