@@ -78,29 +78,40 @@ pub async fn check_redis(
         Some(client) => {
             let start = std::time::Instant::now();
 
-            let mut conn = client
-                .get_connection_manager()
-                .await
-                .map_err(crate::error::AppError::Redis)?;
-            let result: redis::RedisResult<String> =
-                redis::cmd("PING").query_async(&mut conn).await;
+            let conn_result = client.get_connection_manager().await;
+            
+            match conn_result {
+                Ok(mut conn) => {
+                    let result: redis::RedisResult<String> =
+                        redis::cmd("PING").query_async(&mut conn).await;
 
-            let latency = start.elapsed().as_millis() as f64;
+                    let latency = start.elapsed().as_millis() as f64;
 
-            Ok(match result {
-                Ok(_) => HealthStatus {
-                    status: "healthy".to_string(),
-                    score: 100.0,
-                    latency_ms: Some(latency),
-                    last_check: Utc::now(),
-                },
-                Err(_) => HealthStatus {
-                    status: "unhealthy".to_string(),
-                    score: 0.0,
-                    latency_ms: Some(latency),
-                    last_check: Utc::now(),
-                },
-            })
+                    Ok(match result {
+                        Ok(_) => HealthStatus {
+                            status: "healthy".to_string(),
+                            score: 100.0,
+                            latency_ms: Some(latency),
+                            last_check: Utc::now(),
+                        },
+                        Err(_) => HealthStatus {
+                            status: "unhealthy".to_string(),
+                            score: 0.0,
+                            latency_ms: Some(latency),
+                            last_check: Utc::now(),
+                        },
+                    })
+                }
+                Err(e) => {
+                    tracing::error!("Redis health check failed to connect: {}", e);
+                    Ok(HealthStatus {
+                        status: "unhealthy".to_string(),
+                        score: 0.0,
+                        latency_ms: None,
+                        last_check: Utc::now(),
+                    })
+                }
+            }
         }
         None => Ok(HealthStatus {
             status: "disabled".to_string(),

@@ -5,7 +5,7 @@ use axum::{
     Extension,
 };
 use calamine::{open_workbook_from_rs, Reader, Xlsx};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use mongodb::{
     bson::{doc, oid::ObjectId},
     Collection,
@@ -28,6 +28,28 @@ pub struct BatchResponse {
     pub description: Option<String>,
     #[serde(rename = "studentCount")]
     pub student_count: usize,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BatchCreateResponse {
+    pub message: String,
+    pub batch: BatchResponse,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDetailResponse {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub students: Vec<Student>,
+    #[serde(rename = "studentCount")]
+    pub student_count: usize,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
 }
 
 pub async fn create_batch(
@@ -43,7 +65,7 @@ pub async fn create_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -62,13 +84,19 @@ pub async fn create_batch(
         .as_object_id()
         .ok_or_else(|| AppError::Internal("Failed to get inserted ID".to_string()))?;
 
+    let batch_created_at = batch.created_at;
+
     Ok((
         StatusCode::CREATED,
-        Json(BatchResponse {
-            id: batch_id.to_hex(),
-            name: batch.name,
-            description: batch.description,
-            student_count: batch.students.len(),
+        Json(BatchCreateResponse {
+            message: "Batch created successfully".to_string(),
+            batch: BatchResponse {
+                id: batch_id.to_hex(),
+                name: batch.name,
+                description: batch.description,
+                student_count: batch.students.len(),
+                created_at: batch_created_at.to_rfc3339(),
+            },
         }),
     ))
 }
@@ -85,7 +113,7 @@ pub async fn get_batches(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -105,6 +133,7 @@ pub async fn get_batches(
             name: batch.name,
             description: batch.description,
             student_count: batch.students.len(),
+            created_at: batch.created_at.to_rfc3339(),
         });
     }
 
@@ -124,7 +153,7 @@ pub async fn get_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -136,11 +165,14 @@ pub async fn get_batch(
         .await?
         .ok_or_else(|| AppError::NotFound("Batch not found".to_string()))?;
 
-    Ok(Json(BatchResponse {
+    Ok(Json(BatchDetailResponse {
         id: batch.id.unwrap().to_hex(),
         name: batch.name,
         description: batch.description,
+        students: batch.students.clone(),
         student_count: batch.students.len(),
+        created_by: batch.created_by.to_hex(),
+        created_at: batch.created_at,
     }))
 }
 
@@ -157,7 +189,7 @@ pub async fn delete_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -166,7 +198,9 @@ pub async fn delete_batch(
 
     collection.delete_one(doc! { "_id": batch_id }).await?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(serde_json::json!({
+        "message": "Batch deleted successfully"
+    })))
 }
 
 #[derive(Debug, Serialize)]
@@ -235,7 +269,7 @@ pub async fn upload_batch_excel(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -293,22 +327,24 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
             calamine::Data::String(s) => s.clone(),
             _ => continue,
         };
-        let header_lower = header_str.to_lowercase().trim().to_string();
-        col_map.insert(header_lower, i);
+        // Normalize: lowercase and remove all spaces, underscores, hyphens
+        let header_norm = header_str
+            .to_lowercase()
+            .replace([' ', '_', '-'], "");
+        col_map.insert(header_norm, i);
     }
 
     let name_col = col_map
         .get("name")
-        .or_else(|| col_map.get("student name"))
-        .or_else(|| col_map.get("student_name"));
+        .or_else(|| col_map.get("studentname"));
     let roll_col = col_map
         .get("roll")
-        .or_else(|| col_map.get("roll number"))
-        .or_else(|| col_map.get("roll_number"));
-    let email_col = col_map.get("email").or_else(|| col_map.get("email id"));
+        .or_else(|| col_map.get("rollnumber"))
+        .or_else(|| col_map.get("rollno"));
+    let email_col = col_map.get("email").or_else(|| col_map.get("emailid"));
     let college_col = col_map
         .get("college")
-        .or_else(|| col_map.get("college name"));
+        .or_else(|| col_map.get("collegename"));
 
     for (row_idx, row) in rows.iter().skip(1).enumerate() {
         let get_string_val = |col: Option<&usize>, row: &[calamine::Data]| -> Option<String> {

@@ -35,7 +35,7 @@ pub async fn get_session_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let sessions_collection: Collection<Session> = db.collection(Session::collection_name());
@@ -95,7 +95,7 @@ pub async fn get_session_stats(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let sessions_collection: Collection<Session> = db.collection(Session::collection_name());
@@ -152,7 +152,7 @@ pub async fn get_session_totp(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -195,7 +195,7 @@ pub async fn get_session_devices(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -244,7 +244,7 @@ pub async fn get_session_absent(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;

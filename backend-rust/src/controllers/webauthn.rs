@@ -39,7 +39,7 @@ pub async fn reset_credential(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
     let db = state.db.database(db_name);
 
     let credentials: Collection<WebAuthnCredential> =
@@ -139,7 +139,7 @@ pub async fn suspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
     let logs: Collection<WebAuthnReenrollmentLog> = state
@@ -150,7 +150,7 @@ pub async fn suspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(WebAuthnReenrollmentLog::collection_name());
 
@@ -194,7 +194,7 @@ pub async fn unsuspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
     let logs: Collection<WebAuthnReenrollmentLog> = state
@@ -205,7 +205,7 @@ pub async fn unsuspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(WebAuthnReenrollmentLog::collection_name());
 
@@ -250,17 +250,14 @@ pub async fn get_credentials(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
 
-    let mut cursor = credentials
-        .find(doc! {})
-        .sort(doc! { "enrolledAt": -1 })
-        .limit(100)
-        .await?;
+    // Actually, I'll just return it in the format the frontend expects.
+    let total = credentials.count_documents(doc! {}).await?;
+    let mut cursor = credentials.find(doc! {}).sort(doc! { "enrolledAt": -1 }).limit(100).await?;
     let mut creds = Vec::new();
-
     while cursor.advance().await? {
         let c = cursor.deserialize_current()?;
         creds.push(WebAuthnCredentialResponse {
@@ -273,7 +270,15 @@ pub async fn get_credentials(
         });
     }
 
-    Ok(Json(creds))
+    Ok(Json(serde_json::json!({
+        "credentials": creds,
+        "pagination": {
+            "total": total,
+            "page": 1,
+            "limit": 100,
+            "pages": 1
+        }
+    })))
 }
 
 pub async fn get_webauthn_stats(
@@ -286,7 +291,7 @@ pub async fn get_webauthn_stats(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let credentials: Collection<WebAuthnCredential> =
@@ -321,4 +326,33 @@ pub async fn get_webauthn_stats(
         "suspended": suspended,
         "enrollmentRate": enrollment_rate,
     })))
+}
+
+#[cfg(test)]
+mod payload_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_get_credentials_payload_structure() {
+        let creds = vec![json!({
+            "id": "123",
+            "studentId": "ABC",
+            "credentialId": "cred",
+            "isSuspended": false
+        })];
+
+        let payload = json!({
+            "credentials": creds,
+            "pagination": {
+                "pages": 1,
+                "total": 1
+            }
+        });
+
+        assert!(payload.get("credentials").is_some());
+        assert!(payload.get("credentials").unwrap().is_array());
+        assert!(payload.get("pagination").is_some());
+        assert_eq!(payload["pagination"]["pages"], 1);
+    }
 }

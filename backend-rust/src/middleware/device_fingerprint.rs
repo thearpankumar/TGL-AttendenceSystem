@@ -23,7 +23,7 @@ pub async fn check_device_blocked(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let collection: Collection<DeviceFingerprint> = state
         .db
@@ -53,7 +53,7 @@ pub async fn record_device_success(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let collection: Collection<DeviceFingerprint> = state
         .db

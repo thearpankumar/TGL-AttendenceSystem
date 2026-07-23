@@ -27,6 +27,7 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubmitAttendanceRequest {
     pub student_name: String,
     pub roll_number: String,
@@ -82,6 +83,7 @@ fn verify_captcha(captcha_answer: &str, captcha_id: &str, jwt_secret: &str) -> R
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GpsMetadataPayload {
     pub accuracy: Option<f64>,
     pub altitude: Option<f64>,
@@ -119,7 +121,7 @@ pub async fn validate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -142,7 +144,7 @@ pub async fn validate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -174,7 +176,7 @@ pub async fn check_attendance_status(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
     let attendances: Collection<Attendance> = state
@@ -185,7 +187,7 @@ pub async fn check_attendance_status(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -213,6 +215,7 @@ pub async fn check_attendance_status(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StatusQuery {
     pub roll_number: String,
 }
@@ -229,7 +232,7 @@ pub async fn get_upload_url(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -342,7 +345,7 @@ pub async fn submit_attendance(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let sessions: Collection<Session> = state
         .db
@@ -849,9 +852,10 @@ pub async fn submit_attendance(
                 "studentName": attendance.student_name,
                 "rollNumber": attendance.roll_number,
                 "verified": attendance.verified,
-                "distance": distance.round(),
+                "distanceFromLocation": distance.round(),
                 "deviceFirstSeen": attendance.device_first_seen,
                 "deviceFlag": device_flag,
+                "capturedAt": attendance.captured_at,
             },
             "deviceWarning": if device_check.flags.is_empty() { None } else { Some(device_check.flags) }
         })),

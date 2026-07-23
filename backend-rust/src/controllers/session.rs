@@ -23,6 +23,7 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSessionRequest {
     pub location_id: String,
     pub batch_id: Option<String>,
@@ -38,11 +39,23 @@ pub struct SessionResponse {
     pub token: String,
     #[serde(rename = "locationId")]
     pub location_id: String,
+    #[serde(rename = "locationName")]
+    pub location_name: Option<String>,
+    #[serde(rename = "batchId")]
+    pub batch_id: Option<String>,
+    #[serde(rename = "batchName")]
+    pub batch_name: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "isActive")]
     pub is_active: bool,
     #[serde(rename = "expiresAt")]
     pub expires_at: DateTime<Utc>,
+    #[serde(rename = "tokenPrefix")]
+    pub token_prefix: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<DateTime<Utc>>,
+    #[serde(rename = "attendanceCount")]
+    pub attendance_count: Option<i64>,
 }
 
 pub async fn create_session(
@@ -66,7 +79,7 @@ pub async fn create_session(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -102,15 +115,27 @@ pub async fn create_session(
         .as_object_id()
         .ok_or_else(|| AppError::Internal("Failed to get inserted ID".to_string()))?;
 
+    let location = state
+        .database()
+        .collection(Location::collection_name())
+        .find_one(doc! { "_id": location_id })
+        .await?;
+
     Ok((
         StatusCode::CREATED,
         Json(SessionResponse {
             id: session_id.to_hex(),
             token,
             location_id: payload.location_id,
+            location_name: location.as_ref().map(|l: &crate::models::Location| l.name.clone()),
+            batch_id: session.batch_id.map(|b| b.to_hex()),
+            batch_name: None,
             description: session.description,
             is_active: true,
             expires_at: session.expires_at,
+            token_prefix: Some(session.token_prefix),
+            created_at: Some(session.created_at),
+            attendance_count: Some(0),
         }),
     ))
 }
@@ -120,41 +145,56 @@ pub async fn get_sessions(
     Extension(_auth): Extension<AuthenticatedAdmin>,
     Query(_query): Query<serde_json::Value>,
 ) -> Result<impl IntoResponse> {
-    let collection: Collection<Session> = state
-        .db
-        .database(
-            state
-                .config
-                .mongodb_uri
-                .split('/')
-                .next_back()
-                .unwrap_or("default"),
-        )
-        .collection(Session::collection_name());
+    let db = state.database();
+    let sessions: Collection<Session> = db.collection(Session::collection_name());
+    let locations: Collection<Location> = db.collection(Location::collection_name());
+    let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
+    let batches: Collection<Batch> = db.collection(Batch::collection_name());
 
-    let mut cursor = collection
+    let mut cursor = sessions
         .find(doc! {})
         .sort(doc! { "createdAt": -1 })
         .limit(DASHBOARD_PAGE_SIZE)
         .await?;
-    let mut sessions = Vec::new();
+    let mut sessions_list = Vec::new();
 
     while cursor.advance().await? {
         let session = cursor.deserialize_current()?;
-        sessions.push(SessionResponse {
+        
+        let location = locations
+            .find_one(doc! { "_id": session.location_id })
+            .await?;
+        
+        let batch = if let Some(batch_id) = session.batch_id {
+            batches.find_one(doc! { "_id": batch_id }).await?
+        } else {
+            None
+        };
+
+        let attendance_count = attendances
+            .count_documents(doc! { "sessionId": session.id })
+            .await?;
+
+        sessions_list.push(SessionResponse {
             id: session
                 .id
                 .ok_or_else(|| AppError::Internal("No ID".to_string()))?
                 .to_hex(),
             token: String::new(),
             location_id: session.location_id.to_hex(),
+            location_name: location.map(|l| l.name),
+            batch_id: session.batch_id.map(|b| b.to_hex()),
+            batch_name: batch.map(|b| b.name),
             description: session.description,
             is_active: session.is_active,
             expires_at: session.expires_at,
+            token_prefix: Some(session.token_prefix),
+            created_at: Some(session.created_at),
+            attendance_count: Some(attendance_count as i64),
         });
     }
 
-    Ok(Json(sessions))
+    Ok(Json(sessions_list))
 }
 
 pub async fn get_session(
@@ -162,25 +202,33 @@ pub async fn get_session(
     Extension(_auth): Extension<AuthenticatedAdmin>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse> {
-    let collection: Collection<Session> = state
-        .db
-        .database(
-            state
-                .config
-                .mongodb_uri
-                .split('/')
-                .next_back()
-                .unwrap_or("default"),
-        )
-        .collection(Session::collection_name());
+    let db = state.database();
+    let sessions: Collection<Session> = db.collection(Session::collection_name());
+    let locations: Collection<Location> = db.collection(Location::collection_name());
+    let batches: Collection<Batch> = db.collection(Batch::collection_name());
+    let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
 
     let session_id = ObjectId::parse_str(&id)
         .map_err(|e| AppError::BadRequest(format!("Invalid session ID: {}", e)))?;
 
-    let session = collection
+    let session = sessions
         .find_one(doc! { "_id": session_id })
         .await?
         .ok_or_else(|| AppError::NotFound("Session not found".to_string()))?;
+
+    let location = locations
+        .find_one(doc! { "_id": session.location_id })
+        .await?;
+
+    let batch = if let Some(batch_id) = session.batch_id {
+        batches.find_one(doc! { "_id": batch_id }).await?
+    } else {
+        None
+    };
+
+    let attendance_count = attendances
+        .count_documents(doc! { "sessionId": session.id })
+        .await?;
 
     Ok(Json(SessionResponse {
         id: session
@@ -189,9 +237,15 @@ pub async fn get_session(
             .to_hex(),
         token: String::new(),
         location_id: session.location_id.to_hex(),
+        location_name: location.map(|l| l.name),
+        batch_id: session.batch_id.map(|b| b.to_hex()),
+        batch_name: batch.map(|b| b.name),
         description: session.description,
         is_active: session.is_active,
         expires_at: session.expires_at,
+        token_prefix: Some(session.token_prefix),
+        created_at: Some(session.created_at),
+        attendance_count: Some(attendance_count as i64),
     }))
 }
 
@@ -208,7 +262,7 @@ pub async fn deactivate_session(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -339,7 +393,7 @@ pub async fn rotate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Session::collection_name());
 

@@ -12,10 +12,13 @@ use crate::middleware::AuthenticatedAdmin;
 use crate::models::SystemConfig;
 use crate::AppState;
 
-pub fn create_routes() -> Router<Arc<AppState>> {
+use crate::middleware::auth_middleware;
+
+pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(get_config).post(update_config))
         .route("/dev-bypass", post(toggle_dev_bypass))
+        .route_layer(axum::middleware::from_fn_with_state(state, auth_middleware))
 }
 
 async fn get_config(
@@ -27,7 +30,7 @@ async fn get_config(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let collection: Collection<SystemConfig> = state
         .db
@@ -52,7 +55,7 @@ async fn update_config(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let configs: Collection<SystemConfig> = state
         .db
@@ -92,7 +95,7 @@ async fn toggle_dev_bypass(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let admins: Collection<crate::models::Admin> = state
         .db

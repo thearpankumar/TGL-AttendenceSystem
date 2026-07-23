@@ -8,7 +8,7 @@ use crate::models::Admin;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String,
+    pub id: String,
     pub exp: usize,
     pub iat: usize,
 }
@@ -24,7 +24,7 @@ pub fn generate_token(admin_id: &ObjectId, jwt_secret: &str, expires_in: &str) -
     let now = chrono::Utc::now().timestamp() as usize;
 
     let claims = Claims {
-        sub: admin_id.to_hex(),
+        id: admin_id.to_hex(),
         exp: now + expiration,
         iat: now,
     };
@@ -80,7 +80,7 @@ pub async fn auth_middleware(
 
     let claims = verify_token(token, &state.config.jwt_secret)?;
 
-    let admin_id = ObjectId::parse_str(&claims.sub)
+    let admin_id = ObjectId::parse_str(&claims.id)
         .map_err(|e| AppError::Unauthorized(format!("Invalid admin ID: {}", e)))?;
 
     let db_name = state
@@ -88,7 +88,7 @@ pub async fn auth_middleware(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default");
+        .unwrap_or("default").split('?').next().unwrap_or("default");
 
     let collection: Collection<Admin> = state
         .db

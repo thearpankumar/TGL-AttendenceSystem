@@ -67,3 +67,10 @@ build-backend:
 	@echo "   Building Rust Backend       "
 	@echo "==============================="
 	cd backend-rust && cargo build --release
+	docker compose build backend
+
+restart-backend: build-backend
+	@echo "==============================="
+	@echo "   Restarting Backend          "
+	@echo "==============================="
+	docker compose up -d backend

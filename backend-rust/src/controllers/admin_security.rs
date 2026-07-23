@@ -18,10 +18,22 @@ use crate::{
 };
 
 #[derive(Debug, Serialize)]
+pub struct UnreviewedFlagsSummary {
+    #[serde(rename = "gpsAnomalies")]
+    pub gps_anomalies: i64,
+    #[serde(rename = "emulatorDetected")]
+    pub emulator_detected: i64,
+    #[serde(rename = "integrityIssues")]
+    pub integrity_issues: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SecuritySummary {
-    pub total_flagged: i64,
-    pub unreviewed: i64,
-    pub high_severity: i64,
+    pub total_submissions: i64,
+    pub flagged_submissions: i64,
+    pub unreviewed_flags: UnreviewedFlagsSummary,
+    pub flag_percentage: String,
 }
 
 pub async fn get_security_summary(
@@ -37,43 +49,71 @@ pub async fn get_security_summary(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
     let session_oid = ObjectId::parse_str(&session_id)
         .map_err(|e| AppError::BadRequest(format!("Invalid session ID: {}", e)))?;
 
-    let total_flagged = attendances
+    let total_submissions = attendances
+        .count_documents(doc! { "sessionId": session_oid })
+        .await?;
+
+    let flagged_submissions = attendances
         .count_documents(doc! { "sessionId": session_oid, "flagged": true })
         .await?;
-    let unreviewed = attendances
-        .count_documents(doc! { "sessionId": session_oid, "flagged": true, "flagReviewed": false })
+
+    let unreviewed_gps = attendances
+        .count_documents(doc! { 
+            "sessionId": session_oid, 
+            "flagged": true, 
+            "flagReviewed": false,
+            "$or": [
+                { "gpsAnomalies": { "$exists": true, "$not": { "$size": 0 } } },
+                { "gpsMockLocation": true }
+            ]
+        })
         .await?;
 
-    // Count GPS anomalies with high severity using aggregation pipeline
-    let pipeline = vec![
-        doc! { "$match": { "sessionId": session_oid, "flagged": true } },
-        doc! { "$unwind": "$gpsAnomalies" },
-        doc! { "$match": { "gpsAnomalies.severity": "high" } },
-        doc! { "$count": "count" },
-    ];
+    let unreviewed_emulator = attendances
+        .count_documents(doc! { 
+            "sessionId": session_oid, 
+            "flagged": true, 
+            "flagReviewed": false,
+            "emulatorDetected": true
+        })
+        .await?;
 
-    let mut cursor = attendances.aggregate(pipeline).await?;
-    let mut high_severity = 0i64;
-    while cursor.advance().await? {
-        let doc = cursor.deserialize_current()?;
-        high_severity = doc.get_i64("count").unwrap_or(0);
-    }
+    let unreviewed_integrity = attendances
+        .count_documents(doc! { 
+            "sessionId": session_oid, 
+            "flagged": true, 
+            "flagReviewed": false,
+            "integrityChecks": { "$exists": true, "$not": { "$size": 0 } }
+        })
+        .await?;
+
+    let flag_percentage = if total_submissions > 0 {
+        format!("{:.1}%", (flagged_submissions as f64 / total_submissions as f64) * 100.0)
+    } else {
+        "0.0%".to_string()
+    };
 
     Ok(Json(SecuritySummary {
-        total_flagged: total_flagged as i64,
-        unreviewed: unreviewed as i64,
-        high_severity,
+        total_submissions: total_submissions as i64,
+        flagged_submissions: flagged_submissions as i64,
+        unreviewed_flags: UnreviewedFlagsSummary {
+            gps_anomalies: unreviewed_gps as i64,
+            emulator_detected: unreviewed_emulator as i64,
+            integrity_issues: unreviewed_integrity as i64,
+        },
+        flag_percentage,
     }))
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReviewSubmissionRequest {
     pub action: String, // "approve" or "reject"
     pub notes: Option<String>,
@@ -93,7 +133,7 @@ pub async fn review_submission(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -177,7 +217,7 @@ pub async fn get_flagged_submissions(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -271,7 +311,7 @@ pub async fn get_submission_details(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
@@ -380,7 +420,7 @@ pub async fn get_security_settings(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let configs: Collection<SystemConfig> = db.collection(SystemConfig::collection_name());
@@ -412,7 +452,7 @@ pub async fn update_security_settings(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     let configs: Collection<SystemConfig> = db.collection(SystemConfig::collection_name());

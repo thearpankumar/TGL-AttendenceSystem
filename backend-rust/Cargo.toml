@@ -97,11 +97,15 @@ integration-tests = []
 opt-level = 1
 
 [profile.release]
-lto = true
-codegen-units = 1
+# Fast local release builds without LTO
 strip = true
 opt-level = 3
 panic = "abort"
+
+[profile.prod]
+inherits = "release"
+lto = true
+codegen-units = 1
 
 [profile.dev]
 opt-level = 0

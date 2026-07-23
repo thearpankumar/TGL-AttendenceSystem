@@ -42,8 +42,8 @@ pub fn create_routes(state: Arc<AppState>) -> Router {
             admin_security::create_routes(state.clone()),
         )
         .nest("/attend", student::create_routes(state.clone()))
-        .nest("/s", short_link::create_routes())
-        .nest("/config", config::create_routes())
+        .nest("/s", short_link::create_routes(state.clone()))
+        .nest("/config", config::create_routes(state.clone()))
         .nest("/device", device::create_routes())
         .nest("/logs/client", client_log::create_routes())
         .route("/storage-info", get(get_storage_info))

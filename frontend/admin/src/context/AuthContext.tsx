@@ -54,8 +54,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = useCallback(async (username: string, password: string): Promise<LoginResult> => {
     try {
-      const res = await axios.post<{ token: string } & Admin>('/api/admin/login', { username, password });
-      const { token, ...adminData } = res.data;
+      const res = await axios.post<{ token: string; admin: Admin }>('/api/admin/login', { username, password });
+      const { token, admin: adminData } = res.data;
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setAdmin(adminData);

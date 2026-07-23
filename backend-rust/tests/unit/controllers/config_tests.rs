@@ -261,7 +261,7 @@ mod jwt_token_tests {
         let claims = attendance_geotag_backend::middleware::verify_token(&token, jwt_secret)
             .expect("Failed to verify token");
 
-        assert_eq!(claims.sub, admin_id.to_hex());
+        assert_eq!(claims.id, admin_id.to_hex());
     }
 
     #[test]

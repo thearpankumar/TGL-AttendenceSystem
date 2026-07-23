@@ -44,7 +44,7 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(crate::controllers::get_locations).post(crate::controllers::create_location),
         )
         .route(
-            "/locations/:id",
+            "/locations/{id}",
             get(crate::controllers::get_location)
                 .put(crate::controllers::update_location)
                 .delete(crate::controllers::delete_location),
@@ -54,54 +54,54 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(crate::controllers::get_sessions).post(crate::controllers::create_session),
         )
         .route(
-            "/sessions/:id",
+            "/sessions/{id}",
             get(crate::controllers::get_session)
                 .patch(crate::controllers::deactivate_session)
                 .delete(crate::controllers::delete_session),
         )
         .route(
-            "/sessions/:id/rotate",
+            "/sessions/{id}/rotate",
             post(crate::controllers::rotate_token),
         )
         .route(
-            "/sessions/:id/deactivate",
+            "/sessions/{id}/deactivate",
             post(crate::controllers::deactivate_session),
         )
         .route(
-            "/sessions/:id/attendance",
+            "/sessions/{id}/attendance",
             get(crate::controllers::get_session_attendance),
         )
         .route(
-            "/sessions/:id/stats",
+            "/sessions/{id}/stats",
             get(crate::controllers::get_session_stats),
         )
         .route(
-            "/sessions/:id/totp",
+            "/sessions/{id}/totp",
             get(crate::controllers::get_session_totp),
         )
         .route(
-            "/sessions/:id/devices",
+            "/sessions/{id}/devices",
             get(crate::controllers::get_session_devices),
         )
         .route(
-            "/sessions/:id/export",
+            "/sessions/{id}/export",
             get(crate::controllers::export_session_attendance),
         )
         .route(
-            "/sessions/:id/absent",
+            "/sessions/{id}/absent",
             get(crate::controllers::get_session_absent),
         )
         .route(
-            "/sessions/:id/attendance/bulk-verify",
+            "/sessions/{id}/attendance/bulk-verify",
             post(crate::controllers::bulk_verify_attendance),
         )
         .route("/flagged", get(crate::controllers::get_flagged_attendance))
         .route(
-            "/attendance/:id/review",
+            "/attendance/{id}/review",
             patch(crate::controllers::review_attendance),
         )
         .route(
-            "/attendance/:id/verify",
+            "/attendance/{id}/verify",
             patch(crate::controllers::verify_attendance),
         )
         .route(
@@ -113,16 +113,16 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(crate::controllers::get_available_sessions),
         )
         .route(
-            "/shortlinks/:shortCode",
+            "/shortlinks/{shortCode}",
             get(crate::controllers::get_short_link_by_code)
                 .delete(crate::controllers::delete_short_link),
         )
         .route(
-            "/shortlinks/:shortCode/attach",
+            "/shortlinks/{shortCode}/attach",
             post(crate::controllers::attach_short_link),
         )
         .route(
-            "/shortlinks/:shortCode/detach",
+            "/shortlinks/{shortCode}/detach",
             post(crate::controllers::detach_short_link),
         )
         .route(
@@ -147,14 +147,10 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/batches",
-            get(crate::controllers::get_batches).post(crate::controllers::create_batch),
+            get(crate::controllers::get_batches).post(crate::controllers::upload_batch_excel),
         )
         .route(
-            "/batches/upload",
-            post(crate::controllers::upload_batch_excel),
-        )
-        .route(
-            "/batches/:id",
+            "/batches/{id}",
             get(crate::controllers::get_batch).delete(crate::controllers::delete_batch),
         )
         // Rate limit middleware runs BEFORE auth middleware

@@ -687,7 +687,7 @@ mod tests {
 
             let claims = result.unwrap();
             assert_eq!(
-                claims.sub,
+                claims.id,
                 admin_id.to_hex(),
                 "Claims should contain correct admin ID"
             );
@@ -705,7 +705,7 @@ mod tests {
 
             // Create an expired token (expired 1 hour ago)
             let expired_claims = Claims {
-                sub: admin_id.to_hex(),
+                id: admin_id.to_hex(),
                 exp: now - 3600, // Expired 1 hour ago
                 iat: now - 7200, // Issued 2 hours ago
             };
@@ -752,7 +752,7 @@ mod tests {
             let claims = verify_token(&token, JWT_SECRET).expect("Valid token should parse");
 
             // Verify claims structure
-            assert!(!claims.sub.is_empty(), "Subject should not be empty");
+            assert!(!claims.id.is_empty(), "Subject should not be empty");
             assert!(claims.exp > 0, "Expiration should be positive");
             assert!(claims.iat > 0, "Issued at should be positive");
             assert!(
@@ -775,7 +775,7 @@ mod tests {
             // Should be verifiable
             let claims =
                 verify_token(&token, JWT_SECRET).expect("Generated token should be verifiable");
-            assert_eq!(claims.sub, admin_id.to_hex());
+            assert_eq!(claims.id, admin_id.to_hex());
         }
 
         /// Test: different expiry formats should work
@@ -791,7 +791,7 @@ mod tests {
                     .unwrap_or_else(|_| panic!("Failed with expiry: {}", expiry));
                 let claims = verify_token(&token, JWT_SECRET)
                     .unwrap_or_else(|_| panic!("Failed to verify token with expiry: {}", expiry));
-                assert_eq!(claims.sub, admin_id.to_hex());
+                assert_eq!(claims.id, admin_id.to_hex());
             }
         }
     }

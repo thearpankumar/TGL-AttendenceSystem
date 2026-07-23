@@ -13,17 +13,17 @@ use crate::AppState;
 
 pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
-        .route("/:token", get(crate::controllers::validate_token))
+        .route("/{token}", get(crate::controllers::validate_token))
         .route(
-            "/:token/status",
+            "/{token}/status",
             get(crate::controllers::check_attendance_status),
         )
         .route(
-            "/:token/upload-url",
+            "/{token}/upload-url",
             get(crate::controllers::get_upload_url),
         )
-        .route("/:token/captcha", get(crate::controllers::get_captcha))
-        .route("/:token", post(crate::controllers::submit_attendance))
+        .route("/{token}/captcha", get(crate::controllers::get_captcha))
+        .route("/{token}", post(crate::controllers::submit_attendance))
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(mobile_check_middleware))

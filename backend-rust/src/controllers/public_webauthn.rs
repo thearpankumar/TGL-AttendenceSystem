@@ -96,6 +96,7 @@ pub async fn get_webauthn_status(
 // =================== Registration Start ===================
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct RegistrationStartRequest {
     pub roll_number: String,
     pub student_name: String,
@@ -240,12 +241,14 @@ pub async fn start_registration(
 // =================== Registration Finish ===================
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct RegistrationFinishRequest {
     pub roll_number: String,
     pub credential: CredentialResponse,
 }
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct CredentialResponse {
     pub id: String,
     pub raw_id: Option<String>,
@@ -256,6 +259,7 @@ pub struct CredentialResponse {
 }
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct CredentialResponseData {
     pub client_data_json: String,
     pub attestation_object: String,
@@ -364,6 +368,7 @@ pub async fn finish_registration(
 // =================== Authentication Start ===================
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct AuthenticationStartRequest {
     pub roll_number: String,
 }
@@ -527,6 +532,7 @@ pub async fn start_conditional_authentication(
 // =================== Authentication Finish ===================
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct AuthenticationFinishRequest {
     pub roll_number: Option<String>,
     pub credential: AuthenticationCredentialResponse,
@@ -540,6 +546,7 @@ pub struct AuthenticationFinishRequest {
 }
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct AuthenticationCredentialResponse {
     pub id: String,
     pub raw_id: Option<String>,
@@ -550,6 +557,7 @@ pub struct AuthenticationCredentialResponse {
 }
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct AuthResponseData {
     pub client_data_json: String,
     pub authenticator_data: String,
@@ -933,6 +941,7 @@ pub async fn get_captcha(
 // =================== Submit Attendance ===================
 
 #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
 pub struct SubmitAttendanceRequest {
     pub roll_number: String,
     pub student_name: String,

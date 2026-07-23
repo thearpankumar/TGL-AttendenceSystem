@@ -29,7 +29,7 @@ pub async fn get_flagged_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -73,6 +73,7 @@ pub struct FlaggedQuery {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AttendanceReviewRequest {
     pub reviewed: bool,
     pub review_notes: Option<String>,
@@ -90,7 +91,7 @@ pub async fn review_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -117,6 +118,7 @@ pub async fn review_attendance(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyRequest {
     pub verified: bool,
 }
@@ -133,7 +135,7 @@ pub async fn verify_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -170,6 +172,7 @@ pub async fn verify_attendance(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BulkVerifyRequest {
     pub ids: Vec<String>,
     pub verified: bool,
@@ -187,7 +190,7 @@ pub async fn bulk_verify_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default"),
+            .unwrap_or("default").split('?').next().unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;

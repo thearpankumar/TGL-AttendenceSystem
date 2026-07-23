@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default")
+        .unwrap_or("default").split('?').next().unwrap_or("default")
         .to_string();
 
     // Initialize AWS SDK config with HTTP timeouts for S3 operations

@@ -284,7 +284,6 @@ pub async fn get_dashboard_stats(
     // Get sessions for this admin
     let mut sessions_cursor = sessions_collection
         .find(session_filter)
-        .projection(doc! { "_id": 1, "batchId": 1 })
         .await?;
 
     let mut session_ids = Vec::new();
@@ -465,8 +464,7 @@ pub async fn get_dashboard_stats(
 
     // Get unique students with their checkin counts
     let mut attendance_cursor = attendance_collection
-        .find(attendance_match)
-        .projection(doc! { "rollNumber": 1, "studentName": 1, "sessionId": 1 })
+        .find(doc! { "sessionId": { "$in": session_ids.clone() } })
         .await?;
 
     // Group students by roll number + name + batch
@@ -1032,7 +1030,6 @@ pub async fn get_recent_activity(
 
     let mut locations_cursor = locations_collection
         .find(doc! { "_id": { "$in": location_ids_vec } })
-        .projection(doc! { "_id": 1, "name": 1 })
         .await?;
 
     let mut location_names = std::collections::HashMap::new();

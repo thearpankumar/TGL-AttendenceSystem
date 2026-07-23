@@ -70,7 +70,7 @@ pub async fn create_location(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -112,7 +112,7 @@ pub async fn get_locations(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -143,7 +143,7 @@ pub async fn get_location(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -186,7 +186,7 @@ pub async fn update_location(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -239,7 +239,7 @@ pub async fn delete_location(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default"),
+                .unwrap_or("default").split('?').next().unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -248,5 +248,7 @@ pub async fn delete_location(
 
     collection.delete_one(doc! { "_id": location_id }).await?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(serde_json::json!({
+        "message": "Location deleted successfully"
+    })))
 }
