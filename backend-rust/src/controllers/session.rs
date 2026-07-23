@@ -81,7 +81,10 @@ pub async fn create_session(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let db = state.db.database(db_name);
     let collection: Collection<Session> = db.collection(Session::collection_name());
@@ -97,7 +100,10 @@ pub async fn create_session(
             .unwrap_or("")
             .trim()
             .to_lowercase();
-        if code.len() < 3 || code.len() > 20 || !code.chars().all(|c| c.is_alphanumeric() || c == '-') {
+        if code.len() < 3
+            || code.len() > 20
+            || !code.chars().all(|c| c.is_alphanumeric() || c == '-')
+        {
             return Err(AppError::BadRequest(
                 "Custom short code must be 3-20 alphanumeric characters or hyphens".to_string(),
             ));
@@ -117,11 +123,7 @@ pub async fn create_session(
     };
 
     let existing_code_to_use = if mode == "existing" {
-        let code = payload
-            .existing_short_code
-            .as_deref()
-            .unwrap_or("")
-            .trim();
+        let code = payload.existing_short_code.as_deref().unwrap_or("").trim();
         if code.is_empty() {
             return Err(AppError::BadRequest(
                 "Please select an existing short link".to_string(),
@@ -190,7 +192,10 @@ pub async fn create_session(
             };
             if let Err(e) = shortlink_collection.insert_one(&short_link).await {
                 let _ = collection.delete_one(doc! { "_id": session_id }).await;
-                return Err(AppError::Internal(format!("Failed to create short link: {}", e)));
+                return Err(AppError::Internal(format!(
+                    "Failed to create short link: {}",
+                    e
+                )));
             }
             code
         }
@@ -210,7 +215,10 @@ pub async fn create_session(
                 .await;
             if let Err(e) = update_res {
                 let _ = collection.delete_one(doc! { "_id": session_id }).await;
-                return Err(AppError::Internal(format!("Failed to attach short link: {}", e)));
+                return Err(AppError::Internal(format!(
+                    "Failed to attach short link: {}",
+                    e
+                )));
             }
             code
         }
@@ -227,7 +235,9 @@ pub async fn create_session(
                 attempts += 1;
                 if attempts > 10 {
                     let _ = collection.delete_one(doc! { "_id": session_id }).await;
-                    return Err(AppError::Internal("Failed to generate unique short code".to_string()));
+                    return Err(AppError::Internal(
+                        "Failed to generate unique short code".to_string(),
+                    ));
                 }
             };
             let short_link = ShortLink {
@@ -243,7 +253,10 @@ pub async fn create_session(
             };
             if let Err(e) = shortlink_collection.insert_one(&short_link).await {
                 let _ = collection.delete_one(doc! { "_id": session_id }).await;
-                return Err(AppError::Internal(format!("Failed to create short link: {}", e)));
+                return Err(AppError::Internal(format!(
+                    "Failed to create short link: {}",
+                    e
+                )));
             }
             code
         }
@@ -261,7 +274,9 @@ pub async fn create_session(
             id: session_id.to_hex(),
             token,
             location_id: payload.location_id,
-            location_name: location.as_ref().map(|l: &crate::models::Location| l.name.clone()),
+            location_name: location
+                .as_ref()
+                .map(|l: &crate::models::Location| l.name.clone()),
             batch_id: session.batch_id.map(|b| b.to_hex()),
             batch_name: None,
             description: session.description,
@@ -311,7 +326,8 @@ pub async fn get_sessions(
             if let Ok(naive_date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
                 if let Some(start_of_day) = naive_date.and_hms_opt(0, 0, 0) {
                     if let Some(end_of_day) = naive_date.and_hms_opt(23, 59, 59) {
-                        let start_utc = DateTime::<Utc>::from_naive_utc_and_offset(start_of_day, Utc);
+                        let start_utc =
+                            DateTime::<Utc>::from_naive_utc_and_offset(start_of_day, Utc);
                         let end_utc = DateTime::<Utc>::from_naive_utc_and_offset(end_of_day, Utc);
                         filter_doc.insert("createdAt", doc! {
                             "$gte": mongodb::bson::DateTime::from_millis(start_utc.timestamp_millis()),
@@ -333,11 +349,11 @@ pub async fn get_sessions(
 
     while cursor.advance().await? {
         let session = cursor.deserialize_current()?;
-        
+
         let location = locations
             .find_one(doc! { "_id": session.location_id })
             .await?;
-        
+
         let batch = if let Some(batch_id) = session.batch_id {
             batches.find_one(doc! { "_id": batch_id }).await?
         } else {
@@ -349,7 +365,9 @@ pub async fn get_sessions(
             .await?;
 
         let short_link = if let Some(sid) = session.id {
-            shortlinks.find_one(doc! { "sessionId": sid, "isActive": true }).await?
+            shortlinks
+                .find_one(doc! { "sessionId": sid, "isActive": true })
+                .await?
         } else {
             None
         };
@@ -448,7 +466,10 @@ pub async fn deactivate_session(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -579,7 +600,10 @@ pub async fn rotate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
 

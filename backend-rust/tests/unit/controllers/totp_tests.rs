@@ -921,9 +921,6 @@ mod device_model_tests {
 // ========== TEST 30: Security Test ==========
 
 mod security_tests {
-    
-
-
 
     #[test]
     fn should_require_authentication_for_admin_endpoints() {
@@ -1015,9 +1012,14 @@ mod shortlink_api_post_tests {
         // Simulate auto-generated short code
         let short_code = generate_auto_short_code();
 
-        assert_eq!(response_status, 201, "Should return 201 for successful creation");
+        assert_eq!(
+            response_status, 201,
+            "Should return 201 for successful creation"
+        );
         assert!(
-            short_code.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+            short_code
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
             "Short code should match pattern ^[a-z0-9]{{6}}$"
         );
         assert_eq!(short_code.len(), 6, "Short code should be 6 characters");
@@ -1040,8 +1042,14 @@ mod shortlink_api_post_tests {
         let custom_code = "custom123";
         let response_status = if has_auth { 201 } else { 401 };
 
-        assert_eq!(response_status, 201, "Should return 201 for successful creation");
-        assert_eq!(custom_code, "custom123", "Short code should match custom code");
+        assert_eq!(
+            response_status, 201,
+            "Should return 201 for successful creation"
+        );
+        assert_eq!(
+            custom_code, "custom123",
+            "Short code should match custom code"
+        );
     }
 
     #[test]
@@ -1062,7 +1070,7 @@ mod shortlink_api_post_tests {
         // - expect(res.body.message).toContain('already exists');
 
         let mut db = MockShortLinkDb::new();
-        
+
         // First creation should succeed
         let first_result = db.create("duplicate123");
         assert!(first_result.is_ok(), "First creation should succeed");
@@ -1106,7 +1114,10 @@ mod shortlink_api_post_tests {
             session_id: session_id.to_string(),
         };
 
-        assert_eq!(response_status, 201, "Should return 201 for successful creation");
+        assert_eq!(
+            response_status, 201,
+            "Should return 201 for successful creation"
+        );
         assert_eq!(
             short_link.session_id, session_id,
             "Short link should be attached to session"
@@ -1128,7 +1139,7 @@ mod shortlink_api_post_tests {
 
         let has_auth = true;
         let session_exists = false;
-        
+
         // Simulate non-existent session check
         let response_status = if has_auth && session_exists {
             201
@@ -1189,7 +1200,10 @@ mod shortlink_api_post_tests {
             short_links: vec!["link1".to_string(), "link2".to_string()],
         };
 
-        assert_eq!(response_status, 200, "Should return 200 for authenticated request");
+        assert_eq!(
+            response_status, 200,
+            "Should return 200 for authenticated request"
+        );
         assert!(
             !mock_response.short_links.is_empty(),
             "Response should contain shortLinks array"
@@ -1336,12 +1350,19 @@ mod shortlink_delete_tests {
 
         let response_status = if has_auth {
             let deleted = db.delete("delete-test");
-            if deleted { 200 } else { 404 }
+            if deleted {
+                200
+            } else {
+                404
+            }
         } else {
             401
         };
 
-        assert_eq!(response_status, 200, "Should return 200 for successful delete");
+        assert_eq!(
+            response_status, 200,
+            "Should return 200 for successful delete"
+        );
         assert!(!db.exists("delete-test"), "Short link should be deleted");
     }
 
@@ -1360,12 +1381,19 @@ mod shortlink_delete_tests {
         let db = MockDeleteDb::new(); // Empty DB
 
         let response_status = if has_auth {
-            if db.exists("nonexistent") { 200 } else { 404 }
+            if db.exists("nonexistent") {
+                200
+            } else {
+                404
+            }
         } else {
             401
         };
 
-        assert_eq!(response_status, 404, "Should return 404 for non-existent link");
+        assert_eq!(
+            response_status, 404,
+            "Should return 404 for non-existent link"
+        );
     }
 }
 
@@ -1458,8 +1486,14 @@ mod short_link_redirect_tests {
 
         assert!(link.session_id.is_some(), "Link should have session");
         assert!(session.is_active, "Session should be active");
-        assert!(redirect_path.contains("/attend/"), "Should redirect to /attend path");
-        assert!(redirect_path.contains(&link.short_code), "Redirect should include short code");
+        assert!(
+            redirect_path.contains("/attend/"),
+            "Should redirect to /attend path"
+        );
+        assert!(
+            redirect_path.contains(&link.short_code),
+            "Redirect should include short code"
+        );
     }
 
     #[test]
@@ -1475,10 +1509,14 @@ mod short_link_redirect_tests {
         let link = MockRedirectLink::with_session("redirect123", "session-abc");
         let redirect_path = format!("/attend/{}", link.short_code);
 
-        assert!(!redirect_path.contains("student-scan.html"), 
-            "Should NOT redirect to old student-scan.html URL");
-        assert!(!redirect_path.contains("?sl="), 
-            "Should NOT use old ?sl= query parameter");
+        assert!(
+            !redirect_path.contains("student-scan.html"),
+            "Should NOT redirect to old student-scan.html URL"
+        );
+        assert!(
+            !redirect_path.contains("?sl="),
+            "Should NOT use old ?sl= query parameter"
+        );
     }
 
     #[test]
@@ -1495,9 +1533,14 @@ mod short_link_redirect_tests {
         let response_status = if link_exists { 302 } else { 404 };
         let response_message = "Invalid Link";
 
-        assert_eq!(response_status, 404, "Should return 404 for non-existent link");
-        assert!(response_message.contains("Invalid Link"), 
-            "Error message should contain 'Invalid Link'");
+        assert_eq!(
+            response_status, 404,
+            "Should return 404 for non-existent link"
+        );
+        assert!(
+            response_message.contains("Invalid Link"),
+            "Error message should contain 'Invalid Link'"
+        );
     }
 
     #[test]
@@ -1515,10 +1558,14 @@ mod short_link_redirect_tests {
         let response_status = if link.session_id.is_none() { 400 } else { 302 };
         let response_message = "Not Configured";
 
-        assert_eq!(response_status, 400, 
-            "Should return 400 for link without session");
-        assert!(response_message.contains("Not Configured"),
-            "Error message should contain 'Not Configured'");
+        assert_eq!(
+            response_status, 400,
+            "Should return 400 for link without session"
+        );
+        assert!(
+            response_message.contains("Not Configured"),
+            "Error message should contain 'Not Configured'"
+        );
     }
 
     #[test]
@@ -1535,10 +1582,13 @@ mod short_link_redirect_tests {
         // - expect(after.lastClickedAt).toBeDefined();
 
         let mut link = MockRedirectLink::with_session("redirect123", "session-abc");
-        
+
         // Before click
         assert_eq!(link.click_count, 0, "Click count should start at 0");
-        assert!(link.last_clicked_at.is_none(), "Last clicked should be None initially");
+        assert!(
+            link.last_clicked_at.is_none(),
+            "Last clicked should be None initially"
+        );
 
         // Simulate redirect/click
         link.increment_click();
@@ -1563,9 +1613,14 @@ mod short_link_redirect_tests {
         let response_status = if session.is_expired { 410 } else { 302 };
         let response_message = "Session Expired";
 
-        assert_eq!(response_status, 410, "Should return 410 for expired session");
-        assert!(response_message.contains("Expired"), 
-            "Error message should contain 'Expired'");
+        assert_eq!(
+            response_status, 410,
+            "Should return 410 for expired session"
+        );
+        assert!(
+            response_message.contains("Expired"),
+            "Error message should contain 'Expired'"
+        );
     }
 
     #[test]
@@ -1583,9 +1638,14 @@ mod short_link_redirect_tests {
         let response_status = if !session.is_active { 400 } else { 302 };
         let response_message = "Session Inactive";
 
-        assert_eq!(response_status, 400, "Should return 400 for inactive session");
-        assert!(response_message.contains("Inactive"),
-            "Error message should contain 'Inactive'");
+        assert_eq!(
+            response_status, 400,
+            "Should return 400 for inactive session"
+        );
+        assert!(
+            response_message.contains("Inactive"),
+            "Error message should contain 'Inactive'"
+        );
     }
 
     #[test]
@@ -1599,13 +1659,15 @@ mod short_link_redirect_tests {
         // - expect(res.body.valid).toBe(true);
 
         let session = MockSession::new_active("test-secret");
-        
+
         // Simulate response
         struct MockSessionResponse {
             valid: bool,
         }
 
-        let response = MockSessionResponse { valid: session.is_active && !session.is_expired };
+        let response = MockSessionResponse {
+            valid: session.is_active && !session.is_expired,
+        };
 
         assert!(response.valid, "Session should be valid");
     }
@@ -1630,7 +1692,7 @@ mod session_qr_token_tests {
         let short_code = "redirect123";
         let secret = "redirect-test-secret";
         let token = mock_generate_qr_token(short_code, secret);
-        
+
         let (valid, _reason) = mock_validate_qr_token(short_code, secret, Some(&token));
 
         assert!(valid, "Valid fresh QR token should be accepted");
@@ -1651,7 +1713,7 @@ mod session_qr_token_tests {
 
         let short_code = "redirect123";
         let secret = "redirect-test-secret";
-        
+
         // Create stale token (3 slots = 15+ seconds old)
         let now_ms = chrono::Utc::now().timestamp_millis();
         let old_slot = now_ms / QR_WINDOW_MS - 3;
@@ -1689,7 +1751,10 @@ mod session_qr_token_tests {
         let (valid, _reason) = mock_validate_qr_token(short_code, secret, Some(&tampered));
         let response_status = if valid { 200 } else { 403 };
 
-        assert_eq!(response_status, 403, "Should return 403 for tampered QR token");
+        assert_eq!(
+            response_status, 403,
+            "Should return 403 for tampered QR token"
+        );
         assert!(!valid, "Tampered QR token should be rejected");
     }
 }
@@ -1697,7 +1762,6 @@ mod session_qr_token_tests {
 // ========== TESTS 54-56: Additional Security Tests ==========
 
 mod additional_security_tests {
-
 
     /// Mock JWT validation
     fn is_valid_jwt(token: &str) -> bool {
@@ -1708,10 +1772,10 @@ mod additional_security_tests {
     /// Check for XSS patterns
     fn contains_xss(input: &str) -> bool {
         let lower = input.to_lowercase();
-        lower.contains("<script>") || 
-        lower.contains("javascript:") ||
-        lower.contains("onerror=") ||
-        lower.contains("onload=")
+        lower.contains("<script>")
+            || lower.contains("javascript:")
+            || lower.contains("onerror=")
+            || lower.contains("onload=")
     }
 
     #[test]
@@ -1729,7 +1793,10 @@ mod additional_security_tests {
         let is_valid = is_valid_jwt(token);
         let response_status = if is_valid { 200 } else { 401 };
 
-        assert_eq!(response_status, 401, "Invalid JWT should be rejected with 401");
+        assert_eq!(
+            response_status, 401,
+            "Invalid JWT should be rejected with 401"
+        );
     }
 
     #[test]
@@ -1745,7 +1812,7 @@ mod additional_security_tests {
         // - expect([400, 500]).toContain(res.status);
 
         let malicious_input = r#"<script>alert("xss")</script>"#;
-        
+
         // Should detect XSS and reject
         let has_xss = contains_xss(malicious_input);
         let response_status = if has_xss { 400 } else { 201 };

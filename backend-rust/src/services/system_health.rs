@@ -79,7 +79,7 @@ pub async fn check_redis(
             let start = std::time::Instant::now();
 
             let conn_result = client.get_connection_manager().await;
-            
+
             match conn_result {
                 Ok(mut conn) => {
                     let result: redis::RedisResult<String> =

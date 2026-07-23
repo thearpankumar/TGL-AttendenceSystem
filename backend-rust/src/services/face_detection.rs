@@ -141,30 +141,26 @@ fn detect_with_ml_model(
     let abs_width = (bbox_rel.x2 - bbox_rel.x1) * width as f32;
     let abs_height = (bbox_rel.y2 - bbox_rel.y1) * height as f32;
 
-    let landmarks: Option<Vec<Landmark>> = best_face
-        .detection
-        .landmarks
-        .as_ref()
-        .map(|lms| {
-            lms.iter()
-                .enumerate()
-                .map(|(i, lm)| {
-                    let label = match i {
-                        0 => "left_eye",
-                        1 => "right_eye",
-                        2 => "nose",
-                        3 => "mouth_left",
-                        4 => "mouth_right",
-                        _ => "unknown",
-                    };
-                    Landmark {
-                        x: lm.0 * width as f32,
-                        y: lm.1 * height as f32,
-                        label: label.to_string(),
-                    }
-                })
-                .collect()
-        });
+    let landmarks: Option<Vec<Landmark>> = best_face.detection.landmarks.as_ref().map(|lms| {
+        lms.iter()
+            .enumerate()
+            .map(|(i, lm)| {
+                let label = match i {
+                    0 => "left_eye",
+                    1 => "right_eye",
+                    2 => "nose",
+                    3 => "mouth_left",
+                    4 => "mouth_right",
+                    _ => "unknown",
+                };
+                Landmark {
+                    x: lm.0 * width as f32,
+                    y: lm.1 * height as f32,
+                    label: label.to_string(),
+                }
+            })
+            .collect()
+    });
 
     let confidence = best_face.detection.score;
 
@@ -192,12 +188,16 @@ fn detect_with_ml_model(
     })
 }
 
-fn detect_with_fallback(img: &DynamicImage, width: u32, height: u32) -> Result<FaceDetectionResult> {
+fn detect_with_fallback(
+    img: &DynamicImage,
+    width: u32,
+    height: u32,
+) -> Result<FaceDetectionResult> {
     debug!("Using fallback face detection (image content analysis)");
 
     let rgb = img.to_rgb8();
     let total_pixels = (width * height) as f32;
-    
+
     let mut skin_pixels = 0u32;
     let mut total_brightness = 0u64;
 
@@ -208,8 +208,11 @@ fn detect_with_fallback(img: &DynamicImage, width: u32, height: u32) -> Result<F
 
         total_brightness += ((r + g + b) / 3.0) as u64;
 
-        let is_skin = r > 95.0 && g > 40.0 && b > 20.0
-            && r > g && r > b
+        let is_skin = r > 95.0
+            && g > 40.0
+            && b > 20.0
+            && r > g
+            && r > b
             && (r - g).abs() > 15.0
             && r.max(g.max(b)) - r.min(g.min(b)) > 15.0;
 
@@ -221,8 +224,8 @@ fn detect_with_fallback(img: &DynamicImage, width: u32, height: u32) -> Result<F
     let skin_ratio = skin_pixels as f32 / total_pixels;
     let avg_brightness = total_brightness as f32 / total_pixels;
 
-    let has_face_like_content = skin_ratio > 0.05 && skin_ratio < 0.6
-        && avg_brightness > 40.0 && avg_brightness < 220.0;
+    let has_face_like_content =
+        skin_ratio > 0.05 && skin_ratio < 0.6 && avg_brightness > 40.0 && avg_brightness < 220.0;
 
     let confidence = if has_face_like_content {
         0.6 + (skin_ratio * 0.3).min(0.35)

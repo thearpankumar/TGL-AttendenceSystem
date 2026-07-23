@@ -46,12 +46,14 @@ pub fn create_routes(state: Arc<AppState>) -> Router {
         .nest("/config", config::create_routes(state.clone()))
         .nest("/device", device::create_routes(state.clone()))
         .nest("/logs/client", client_log::create_routes(state.clone()))
-        .nest("/storage-info", Router::new()
-            .route("/", get(get_storage_info))
-            .layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                crate::middleware::student_rate_limit_middleware,
-            ))
+        .nest(
+            "/storage-info",
+            Router::new().route("/", get(get_storage_info)).layer(
+                axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    crate::middleware::student_rate_limit_middleware,
+                ),
+            ),
         )
         .with_state(state.clone());
 
@@ -126,8 +128,6 @@ async fn health_live() -> Json<HealthResponse> {
         timestamp: Utc::now().to_rfc3339(),
     })
 }
-
-
 
 async fn metrics() -> impl axum::response::IntoResponse {
     use prometheus::Encoder;

@@ -43,7 +43,10 @@ async fn update_config(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let configs: Collection<SystemConfig> = state
         .db
@@ -104,7 +107,10 @@ async fn toggle_dev_bypass(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let admins: Collection<crate::models::Admin> = state
         .db
@@ -150,6 +156,3 @@ async fn toggle_dev_bypass(
         config,
     }))
 }
-
-
-

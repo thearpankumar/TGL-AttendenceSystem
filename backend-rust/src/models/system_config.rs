@@ -188,14 +188,30 @@ pub struct RateLimitsConfig {
     pub client_log_max_requests: u32,
 }
 
-fn default_rl_admin_window() -> u64 { 60 }
-fn default_rl_admin_max() -> u32 { 1000 }
-fn default_rl_student_window() -> u64 { 60 }
-fn default_rl_student_max() -> u32 { 100 }
-fn default_rl_login_window() -> u64 { 60 }
-fn default_rl_login_max() -> u32 { 20 }
-fn default_rl_clientlog_window() -> u64 { 60 }
-fn default_rl_clientlog_max() -> u32 { 100 }
+fn default_rl_admin_window() -> u64 {
+    60
+}
+fn default_rl_admin_max() -> u32 {
+    1000
+}
+fn default_rl_student_window() -> u64 {
+    60
+}
+fn default_rl_student_max() -> u32 {
+    100
+}
+fn default_rl_login_window() -> u64 {
+    60
+}
+fn default_rl_login_max() -> u32 {
+    20
+}
+fn default_rl_clientlog_window() -> u64 {
+    60
+}
+fn default_rl_clientlog_max() -> u32 {
+    100
+}
 
 impl Default for RateLimitsConfig {
     fn default() -> Self {
@@ -221,11 +237,15 @@ pub struct WebAuthnSystemConfig {
     pub grace_period_minutes: i64,
 }
 
-fn default_webauthn_grace() -> i64 { 15 }
+fn default_webauthn_grace() -> i64 {
+    15
+}
 
 impl Default for WebAuthnSystemConfig {
     fn default() -> Self {
-        Self { grace_period_minutes: 15 }
+        Self {
+            grace_period_minutes: 15,
+        }
     }
 }
 
@@ -240,8 +260,12 @@ pub struct PhotoVerificationConfig {
     pub high_similarity_threshold: f32,
 }
 
-fn default_photo_low() -> f32 { 0.15 }
-fn default_photo_high() -> f32 { 0.85 }
+fn default_photo_low() -> f32 {
+    0.15
+}
+fn default_photo_high() -> f32 {
+    0.85
+}
 
 impl Default for PhotoVerificationConfig {
     fn default() -> Self {
@@ -261,7 +285,9 @@ pub struct SessionConfig {
     pub expire_minutes: u64,
 }
 
-fn default_session_expire() -> u64 { 60 }
+fn default_session_expire() -> u64 {
+    60
+}
 
 impl Default for SessionConfig {
     fn default() -> Self {
@@ -280,8 +306,12 @@ pub struct LockoutConfig {
     pub lockout_duration_minutes: u64,
 }
 
-fn default_max_login_attempts() -> u32 { 5 }
-fn default_lockout_duration() -> u64 { 15 }
+fn default_max_login_attempts() -> u32 {
+    5
+}
+fn default_lockout_duration() -> u64 {
+    15
+}
 
 impl Default for LockoutConfig {
     fn default() -> Self {
@@ -301,7 +331,9 @@ pub struct AttendanceConfig {
     pub max_attendance_attempts: u32,
 }
 
-fn default_max_attendance_attempts() -> u32 { 3 }
+fn default_max_attendance_attempts() -> u32 {
+    3
+}
 
 impl Default for AttendanceConfig {
     fn default() -> Self {

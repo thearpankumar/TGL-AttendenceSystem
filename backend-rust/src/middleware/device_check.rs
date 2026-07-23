@@ -68,7 +68,10 @@ pub async fn device_check_middleware(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let collection: Collection<Device> = state
         .db

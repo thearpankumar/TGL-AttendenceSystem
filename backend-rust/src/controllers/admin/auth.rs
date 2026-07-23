@@ -58,7 +58,10 @@ pub async fn register(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Admin::collection_name());
 
@@ -134,7 +137,10 @@ pub async fn login(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Admin::collection_name());
 
@@ -222,7 +228,10 @@ pub async fn get_profile(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Admin::collection_name());
 

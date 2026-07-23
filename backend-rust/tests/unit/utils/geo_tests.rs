@@ -64,12 +64,7 @@ mod calculate_distance_tests {
 
     #[test]
     fn should_handle_undefined_coordinates() {
-        let distance = calculate_distance(
-            f64::NAN,
-            f64::NAN,
-            f64::NAN,
-            f64::NAN,
-        );
+        let distance = calculate_distance(f64::NAN, f64::NAN, f64::NAN, f64::NAN);
         assert!(distance.is_nan());
     }
 

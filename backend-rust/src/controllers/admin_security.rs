@@ -49,7 +49,10 @@ pub async fn get_security_summary(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -65,9 +68,9 @@ pub async fn get_security_summary(
         .await?;
 
     let unreviewed_gps = attendances
-        .count_documents(doc! { 
-            "sessionId": session_oid, 
-            "flagged": true, 
+        .count_documents(doc! {
+            "sessionId": session_oid,
+            "flagged": true,
             "flagReviewed": false,
             "$or": [
                 { "gpsAnomalies": { "$exists": true, "$not": { "$size": 0 } } },
@@ -77,25 +80,28 @@ pub async fn get_security_summary(
         .await?;
 
     let unreviewed_emulator = attendances
-        .count_documents(doc! { 
-            "sessionId": session_oid, 
-            "flagged": true, 
+        .count_documents(doc! {
+            "sessionId": session_oid,
+            "flagged": true,
             "flagReviewed": false,
             "emulatorDetected": true
         })
         .await?;
 
     let unreviewed_integrity = attendances
-        .count_documents(doc! { 
-            "sessionId": session_oid, 
-            "flagged": true, 
+        .count_documents(doc! {
+            "sessionId": session_oid,
+            "flagged": true,
             "flagReviewed": false,
             "integrityChecks": { "$exists": true, "$not": { "$size": 0 } }
         })
         .await?;
 
     let flag_percentage = if total_submissions > 0 {
-        format!("{:.1}%", (flagged_submissions as f64 / total_submissions as f64) * 100.0)
+        format!(
+            "{:.1}%",
+            (flagged_submissions as f64 / total_submissions as f64) * 100.0
+        )
     } else {
         "0.0%".to_string()
     };
@@ -133,7 +139,10 @@ pub async fn review_submission(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -217,7 +226,10 @@ pub async fn get_flagged_submissions(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -311,7 +323,10 @@ pub async fn get_submission_details(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
@@ -420,7 +435,10 @@ pub async fn get_security_settings(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     let configs: Collection<SystemConfig> = db.collection(SystemConfig::collection_name());
@@ -452,7 +470,10 @@ pub async fn update_security_settings(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     let configs: Collection<SystemConfig> = db.collection(SystemConfig::collection_name());

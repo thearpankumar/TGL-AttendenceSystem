@@ -16,7 +16,6 @@ use mongodb::bson::oid::ObjectId;
 // For full integration tests with database and Excel parsing, use the integration test suite.
 
 mod export_session_attendance_tests {
-    
 
     #[test]
     fn should_return_401_without_token() {
@@ -94,7 +93,10 @@ mod export_session_attendance_tests {
         // Verify the content type is correct
         let expected_content_type =
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        assert_eq!(expected_content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        assert_eq!(
+            expected_content_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
 
         // Verify the AttendanceExportRow structure via re-export
         // AttendanceExportRow is re-exported via pub use session::*;
@@ -202,14 +204,16 @@ mod export_excel_structure_tests {
         // - WebAuthn
         // - Device Flag
 
-        let expected_headers = ["Roll Number",
+        let expected_headers = [
+            "Roll Number",
             "Student Name",
             "Status",
             "Verified",
             "Distance (m)",
             "Captured At",
             "WebAuthn",
-            "Device Flag"];
+            "Device Flag",
+        ];
 
         assert_eq!(expected_headers.len(), 8);
         assert!(expected_headers.contains(&"Roll Number"));
@@ -245,7 +249,6 @@ mod export_excel_structure_tests {
 }
 
 mod export_attendance_row_tests {
-    
 
     #[test]
     fn should_populate_attendance_export_row_correctly() {
@@ -348,7 +351,6 @@ mod export_session_ownership_tests {
 }
 
 mod export_batch_merge_tests {
-    
 
     #[test]
     fn should_merge_attendance_with_batch_students() {
@@ -428,7 +430,6 @@ mod export_batch_merge_tests {
 }
 
 mod export_status_determination_tests {
-    
 
     #[test]
     fn should_determine_status_as_present_for_verified() {
@@ -491,7 +492,6 @@ mod export_status_determination_tests {
 }
 
 mod export_session_info_tests {
-    
 
     #[test]
     fn should_include_session_info_in_excel() {
@@ -503,11 +503,13 @@ mod export_session_info_tests {
         // - Description: [description]
         // - Batch: [batch name] (if batch attached)
 
-        let session_info_labels = ["Session Information",
+        let session_info_labels = [
+            "Session Information",
             "Location:",
             "Session ID:",
             "Description:",
-            "Batch:"];
+            "Batch:",
+        ];
 
         assert_eq!(session_info_labels.len(), 5);
         assert!(session_info_labels.contains(&"Location:"));

@@ -94,7 +94,10 @@ async fn main() -> anyhow::Result<()> {
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default")
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default")
         .to_string();
 
     // Initialize AWS SDK config with HTTP timeouts for S3 operations
@@ -133,7 +136,10 @@ async fn main() -> anyhow::Result<()> {
                 SystemConfig::default()
             }
             Err(e) => {
-                tracing::warn!("Failed to load system config from DB: {}. Using defaults.", e);
+                tracing::warn!(
+                    "Failed to load system config from DB: {}. Using defaults.",
+                    e
+                );
                 SystemConfig::default()
             }
         }
@@ -287,8 +293,6 @@ async fn create_indexes(state: &Arc<AppState>) -> anyhow::Result<()> {
 
     let sessions: mongodb::Collection<attendance_geotag_backend::models::Session> =
         db.collection("sessions");
-
-
 
     sessions
         .create_index(

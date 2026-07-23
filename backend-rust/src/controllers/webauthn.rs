@@ -39,7 +39,10 @@ pub async fn reset_credential(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
     let db = state.db.database(db_name);
 
     let credentials: Collection<WebAuthnCredential> =
@@ -139,7 +142,10 @@ pub async fn suspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
     let logs: Collection<WebAuthnReenrollmentLog> = state
@@ -150,7 +156,10 @@ pub async fn suspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(WebAuthnReenrollmentLog::collection_name());
 
@@ -194,7 +203,10 @@ pub async fn unsuspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
     let logs: Collection<WebAuthnReenrollmentLog> = state
@@ -205,7 +217,10 @@ pub async fn unsuspend_credential(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(WebAuthnReenrollmentLog::collection_name());
 
@@ -250,13 +265,20 @@ pub async fn get_credentials(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(WebAuthnCredential::collection_name());
 
     // Actually, I'll just return it in the format the frontend expects.
     let total = credentials.count_documents(doc! {}).await?;
-    let mut cursor = credentials.find(doc! {}).sort(doc! { "enrolledAt": -1 }).limit(100).await?;
+    let mut cursor = credentials
+        .find(doc! {})
+        .sort(doc! { "enrolledAt": -1 })
+        .limit(100)
+        .await?;
     let mut creds = Vec::new();
     while cursor.advance().await? {
         let c = cursor.deserialize_current()?;
@@ -291,7 +313,10 @@ pub async fn get_webauthn_stats(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     let credentials: Collection<WebAuthnCredential> =

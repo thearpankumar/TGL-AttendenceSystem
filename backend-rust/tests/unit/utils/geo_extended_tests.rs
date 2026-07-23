@@ -132,10 +132,8 @@ mod calculate_distance_invalid_input_tests {
     #[test]
     fn should_return_nan_for_undefined_coordinates() {
         // In Rust, undefined is represented as None/NaN
-        let distance1 =
-            calculate_distance(f64::NAN, 77.594, 12.971, 77.594);
-        let distance2 =
-            calculate_distance(12.971, f64::NAN, 12.971, 77.594);
+        let distance1 = calculate_distance(f64::NAN, 77.594, 12.971, 77.594);
+        let distance2 = calculate_distance(12.971, f64::NAN, 12.971, 77.594);
         assert!(distance1.is_nan());
         assert!(distance2.is_nan());
     }

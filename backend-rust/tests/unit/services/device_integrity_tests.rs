@@ -141,7 +141,6 @@ pub async fn check_device_integrity(
 // ============================================================================
 
 mod timing_manipulation_detection {
-    
 
     /// Ported from: "should detect impossibly fast computation"
     /// Node.js test checks that elapsed=0.05 is less than 0.1

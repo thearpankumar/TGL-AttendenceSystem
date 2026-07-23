@@ -95,7 +95,7 @@ pub async fn get_webauthn_status(
 // =================== Registration Start ===================
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct RegistrationStartRequest {
     pub roll_number: String,
     pub student_name: String,
@@ -240,14 +240,14 @@ pub async fn start_registration(
 // =================== Registration Finish ===================
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct RegistrationFinishRequest {
     pub roll_number: String,
     pub credential: CredentialResponse,
 }
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct CredentialResponse {
     pub id: String,
     pub raw_id: Option<String>,
@@ -258,7 +258,7 @@ pub struct CredentialResponse {
 }
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct CredentialResponseData {
     pub client_data_json: String,
     pub attestation_object: String,
@@ -367,7 +367,7 @@ pub async fn finish_registration(
 // =================== Authentication Start ===================
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct AuthenticationStartRequest {
     pub roll_number: String,
 }
@@ -531,7 +531,7 @@ pub async fn start_conditional_authentication(
 // =================== Authentication Finish ===================
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct AuthenticationFinishRequest {
     pub roll_number: Option<String>,
     pub credential: AuthenticationCredentialResponse,
@@ -547,9 +547,8 @@ pub struct AuthenticationFinishRequest {
     pub dev_bypass_webauthn: Option<bool>,
 }
 
-
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct AuthenticationCredentialResponse {
     pub id: String,
     pub raw_id: Option<String>,
@@ -560,7 +559,7 @@ pub struct AuthenticationCredentialResponse {
 }
 
 #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct AuthResponseData {
     pub client_data_json: String,
     pub authenticator_data: String,
@@ -590,7 +589,9 @@ pub async fn finish_authentication(
     State(state): State<Arc<AppState>>,
     Path(short_code): Path<String>,
     axum::Extension(gps_validation): axum::Extension<crate::middleware::GpsValidationResult>,
-    axum::Extension(emulator_detection): axum::Extension<crate::middleware::EmulatorDetectionResult>,
+    axum::Extension(emulator_detection): axum::Extension<
+        crate::middleware::EmulatorDetectionResult,
+    >,
     axum::Extension(device_integrity): axum::Extension<crate::middleware::DeviceIntegrityResult>,
     Json(payload): Json<AuthenticationFinishRequest>,
 ) -> Result<impl IntoResponse> {
@@ -604,10 +605,12 @@ pub async fn finish_authentication(
     let challenges: Collection<WebAuthnChallenge> =
         db.collection(WebAuthnChallenge::collection_name());
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
-    let system_configs: Collection<crate::models::SystemConfig> = db.collection(crate::models::SystemConfig::collection_name());
+    let system_configs: Collection<crate::models::SystemConfig> =
+        db.collection(crate::models::SystemConfig::collection_name());
 
     let sys_config = system_configs.find_one(doc! {}).await?.unwrap_or_default();
-    let is_dev_bypass_all = sys_config.dev_bypass_enabled || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
+    let is_dev_bypass_all = sys_config.dev_bypass_enabled
+        || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
 
     // Find short link
     let short_link = short_links
@@ -735,7 +738,9 @@ pub async fn finish_authentication(
         payload.longitude,
     );
 
-    if distance > location.radius_meters && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false)) {
+    if distance > location.radius_meters
+        && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false))
+    {
         return Err(AppError::BadRequest(format!(
             "You are {}m away from the location (max: {}m)",
             distance, location.radius_meters
@@ -745,34 +750,51 @@ pub async fn finish_authentication(
     let has_high_severity_gps = gps_validation
         .anomalies
         .iter()
-        .any(|a| a.severity == crate::Severity::High) && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
-    
+        .any(|a| a.severity == crate::Severity::High)
+        && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
+
     let has_security_flags = has_high_severity_gps
-        || ((emulator_detection.has_high_severity || emulator_detection.detected) && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
+        || ((emulator_detection.has_high_severity || emulator_detection.detected)
+            && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
 
     let should_flag = has_security_flags || !device_integrity.passed;
-    
+
     let (device_flag, flag_reason) = if has_high_severity_gps {
-        (Some(crate::models::AttendanceDeviceFlag::GpsAnomalyDetected), Some("GPS anomalies detected".to_string()))
+        (
+            Some(crate::models::AttendanceDeviceFlag::GpsAnomalyDetected),
+            Some("GPS anomalies detected".to_string()),
+        )
     } else if emulator_detection.detected {
-        (Some(crate::models::AttendanceDeviceFlag::EmulatorDetected), Some("Emulator detected".to_string()))
+        (
+            Some(crate::models::AttendanceDeviceFlag::EmulatorDetected),
+            Some("Emulator detected".to_string()),
+        )
     } else if !device_integrity.passed {
-        (Some(crate::models::AttendanceDeviceFlag::IntegrityCheckFailed), Some("Integrity checks failed".to_string()))
+        (
+            Some(crate::models::AttendanceDeviceFlag::IntegrityCheckFailed),
+            Some("Integrity checks failed".to_string()),
+        )
     } else {
         (None, None)
     };
 
     let face_detected_result = if is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false) {
         Some(true)
-    } else if let (Some(photo_public_id), true) = (&payload.photo_public_id, payload.photo_url.is_some()) {
+    } else if let (Some(photo_public_id), true) =
+        (&payload.photo_public_id, payload.photo_url.is_some())
+    {
         match state.storage.provider().download(photo_public_id).await {
-            Ok(image_data) => match crate::services::face_detection::detect_faces(&image_data).await {
-                Ok(result) => Some(result.face_detected),
-                Err(_) => None,
-            },
+            Ok(image_data) => {
+                match crate::services::face_detection::detect_faces(&image_data).await {
+                    Ok(result) => Some(result.face_detected),
+                    Err(_) => None,
+                }
+            }
             Err(_) => None,
         }
-    } else { None };
+    } else {
+        None
+    };
 
     // Create attendance record
     let student_name = payload
@@ -820,7 +842,20 @@ pub async fn finish_authentication(
         flag_reviewed_by: None,
         flag_reviewed_at: None,
         flagged: should_flag,
-        flag_reason: if is_dev_bypass_all && (payload.dev_bypass_camera.unwrap_or(false) || payload.dev_bypass_gps.unwrap_or(false) || payload.dev_bypass_webauthn.unwrap_or(false)) { Some(format!("Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}", payload.dev_bypass_camera.unwrap_or(false), payload.dev_bypass_gps.unwrap_or(false), payload.dev_bypass_webauthn.unwrap_or(false))) } else { flag_reason.clone() },
+        flag_reason: if is_dev_bypass_all
+            && (payload.dev_bypass_camera.unwrap_or(false)
+                || payload.dev_bypass_gps.unwrap_or(false)
+                || payload.dev_bypass_webauthn.unwrap_or(false))
+        {
+            Some(format!(
+                "Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}",
+                payload.dev_bypass_camera.unwrap_or(false),
+                payload.dev_bypass_gps.unwrap_or(false),
+                payload.dev_bypass_webauthn.unwrap_or(false)
+            ))
+        } else {
+            flag_reason.clone()
+        },
         flag_details: flag_reason,
         captured_at: Utc::now(),
         gps_accuracy: payload.gps_data.as_ref().and_then(|g| g.accuracy),
@@ -1012,8 +1047,6 @@ fn sign_captcha(text: &str, timestamp: i64) -> String {
     hasher.update(format!("{}:{}", text.to_lowercase(), timestamp).as_bytes());
     hex::encode(hasher.finalize())
 }
-
-
 
 fn extract_public_key_from_attestation(attestation_object: &str, _rp_id: &str) -> Result<Vec<u8>> {
     let decoded = base64::Engine::decode(

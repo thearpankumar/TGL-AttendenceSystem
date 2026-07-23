@@ -4,7 +4,8 @@ use std::sync::Arc;
 use crate::AppState;
 
 pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
-    Router::new().route("/", post(log_client_error))
+    Router::new()
+        .route("/", post(log_client_error))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             crate::middleware::client_log_rate_limit_middleware,

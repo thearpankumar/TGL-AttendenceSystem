@@ -29,7 +29,10 @@ pub async fn get_flagged_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -91,7 +94,10 @@ pub async fn review_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -135,7 +141,10 @@ pub async fn verify_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;
@@ -190,7 +199,10 @@ pub async fn bulk_verify_attendance(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
 
     use mongodb::bson::oid::ObjectId;

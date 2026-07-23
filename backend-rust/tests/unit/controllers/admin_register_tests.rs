@@ -512,12 +512,14 @@ mod register_admin_tests {
             password: "password123".to_string(),
             admin_secret: "test-admin-secret".to_string(),
         };
-        assert!(admin_registration.username.chars().all(|c| c.is_alphanumeric()));
+        assert!(admin_registration
+            .username
+            .chars()
+            .all(|c| c.is_alphanumeric()));
     }
 }
 
 mod password_hashing_tests {
-    
 
     /// Test: password should be hashed and not stored as plaintext
     ///
@@ -525,7 +527,6 @@ mod password_hashing_tests {
     /// - expect(stored.password).not.toBe('password123')
     #[test]
     fn password_should_be_hashed_not_plaintext() {
-
         // Verify hash format detection (models/admin.rs lines 59-67)
         let bcrypt_hash = "$2b$12$abcdef...";
         let argon2_hash = "$argon2id$v=19$m=19456,t=2,p=1$...";
@@ -547,7 +548,6 @@ mod password_hashing_tests {
 }
 
 mod admin_registration_struct_tests {
-    
 
     /// Test: AdminRegistration struct has correct fields
     #[test]
@@ -594,7 +594,6 @@ mod admin_registration_struct_tests {
 }
 
 mod validate_request_tests {
-    
 
     /// Test: valid registration passes validation
     #[test]
@@ -651,7 +650,6 @@ mod validate_request_tests {
 }
 
 mod error_response_tests {
-    
 
     /// Test: BadRequest error maps to 400 status
     #[test]

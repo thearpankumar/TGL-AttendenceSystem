@@ -132,27 +132,42 @@ impl RateLimiter {
 
     pub async fn student_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("student:{}", ip);
-        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests))
+            .await
     }
 
     pub async fn admin_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("admin:{}", ip);
-        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests))
+            .await
     }
 
     pub async fn login_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("login:{}", ip);
-        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests))
+            .await
     }
 
-    pub async fn registration_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
+    pub async fn registration_rate_limit(
+        &self,
+        ip: &str,
+        max_requests: u32,
+        window_secs: u64,
+    ) -> bool {
         let key = format!("registration:{}", ip);
-        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests))
+            .await
     }
 
-    pub async fn client_log_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
+    pub async fn client_log_rate_limit(
+        &self,
+        ip: &str,
+        max_requests: u32,
+        window_secs: u64,
+    ) -> bool {
         let key = format!("clientlog:{}", ip);
-        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests))
+            .await
     }
 
     pub fn is_redis_enabled(&self) -> bool {

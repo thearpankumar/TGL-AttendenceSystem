@@ -112,9 +112,7 @@ impl MockGpsHistoryService {
         );
 
         let mut memory = self.memory_fallback.lock().unwrap();
-        let history = memory
-            .entry(device_id.to_string())
-            .or_default();
+        let history = memory.entry(device_id.to_string()).or_default();
         history.push_back(gps_position.clone());
 
         // Maintain max history size

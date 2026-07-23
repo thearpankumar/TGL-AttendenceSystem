@@ -151,7 +151,13 @@ fn verify_mock_struct_fields() {
         password: "p".to_string(),
         role: "r".to_string(),
     };
-    let _ = (&admin.id, &admin.username, &admin.email, &admin.password, &admin.role);
+    let _ = (
+        &admin.id,
+        &admin.username,
+        &admin.email,
+        &admin.password,
+        &admin.role,
+    );
 
     let location = MockLocation {
         id: Some(ObjectId::new()),
@@ -161,7 +167,14 @@ fn verify_mock_struct_fields() {
         radius_meters: 10.0,
         created_by: ObjectId::new(),
     };
-    let _ = (&location.id, &location.name, &location.latitude, &location.longitude, &location.radius_meters, &location.created_by);
+    let _ = (
+        &location.id,
+        &location.name,
+        &location.latitude,
+        &location.longitude,
+        &location.radius_meters,
+        &location.created_by,
+    );
 
     let session = MockSession {
         id: Some(ObjectId::new()),
@@ -172,7 +185,15 @@ fn verify_mock_struct_fields() {
         expires_at: Utc::now(),
         is_active: true,
     };
-    let _ = (&session.id, &session.token_hash, &session.token_prefix, &session.location_id, &session.created_by, &session.expires_at, &session.is_active);
+    let _ = (
+        &session.id,
+        &session.token_hash,
+        &session.token_prefix,
+        &session.location_id,
+        &session.created_by,
+        &session.expires_at,
+        &session.is_active,
+    );
 
     let short_link = MockShortLink {
         id: Some(ObjectId::new()),
@@ -181,7 +202,13 @@ fn verify_mock_struct_fields() {
         created_by: ObjectId::new(),
         is_active: true,
     };
-    let _ = (&short_link.id, &short_link.short_code, &short_link.session_id, &short_link.created_by, &short_link.is_active);
+    let _ = (
+        &short_link.id,
+        &short_link.short_code,
+        &short_link.session_id,
+        &short_link.created_by,
+        &short_link.is_active,
+    );
 
     let challenge = MockWebAuthnChallenge {
         id: Some(ObjectId::new()),
@@ -192,7 +219,15 @@ fn verify_mock_struct_fields() {
         short_code: Some("sc".to_string()),
         expires_at: Utc::now(),
     };
-    let _ = (&challenge.id, &challenge.student_id, &challenge.challenge, &challenge.challenge_type, &challenge.session_id, &challenge.short_code, &challenge.expires_at);
+    let _ = (
+        &challenge.id,
+        &challenge.student_id,
+        &challenge.challenge,
+        &challenge.challenge_type,
+        &challenge.session_id,
+        &challenge.short_code,
+        &challenge.expires_at,
+    );
 
     let cred = MockWebAuthnCredential {
         id: Some(ObjectId::new()),
@@ -201,7 +236,13 @@ fn verify_mock_struct_fields() {
         public_key: vec![],
         counter: 0,
     };
-    let _ = (&cred.id, &cred.student_id, &cred.credential_id, &cred.public_key, &cred.counter);
+    let _ = (
+        &cred.id,
+        &cred.student_id,
+        &cred.credential_id,
+        &cred.public_key,
+        &cred.counter,
+    );
 
     let flag = MockFlag {
         id: Some(ObjectId::new()),
@@ -226,7 +267,15 @@ fn verify_mock_struct_fields() {
         confidence: Some(0.9),
         flags: vec![],
     };
-    let _ = (&photo_hash.id, &photo_hash.roll_number, &photo_hash.photo_hash, &photo_hash.session_id, &photo_hash.captured_at, &photo_hash.confidence, &photo_hash.flags);
+    let _ = (
+        &photo_hash.id,
+        &photo_hash.roll_number,
+        &photo_hash.photo_hash,
+        &photo_hash.session_id,
+        &photo_hash.captured_at,
+        &photo_hash.confidence,
+        &photo_hash.flags,
+    );
 }
 
 // ============================================================================
@@ -1126,7 +1175,6 @@ mod photo_hash_model_tests {
 
 #[cfg(test)]
 mod error_sanitization_tests {
-    
 
     #[test]
     fn should_not_expose_internal_errors_to_clients() {

@@ -24,4 +24,3 @@ pub use public_webauthn::{
     get_upload_url as get_shortlink_upload_url, get_webauthn_status, start_authentication,
     start_conditional_authentication, start_registration,
 };
-

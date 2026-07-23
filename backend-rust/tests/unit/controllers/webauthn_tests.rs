@@ -1161,8 +1161,10 @@ mod admin_get_credentials_tests {
     fn lists_all_credentials() {
         // Test case: GET /api/admin/webauthn/credentials returns all credentials
 
-        let creds = [create_mock_webauthn_credential("ABC123", false),
-            create_mock_webauthn_credential("DEF456", false)];
+        let creds = [
+            create_mock_webauthn_credential("ABC123", false),
+            create_mock_webauthn_credential("DEF456", false),
+        ];
 
         assert_eq!(creds.len(), 2);
     }
@@ -1204,8 +1206,10 @@ mod admin_get_credentials_tests {
     fn filters_by_suspended_status() {
         // Test case: GET credentials with ?suspended=true filters results
 
-        let creds = [create_mock_webauthn_credential("ABC123", false),
-            create_mock_webauthn_credential("DEF456", true)];
+        let creds = [
+            create_mock_webauthn_credential("ABC123", false),
+            create_mock_webauthn_credential("DEF456", true),
+        ];
 
         let suspended: Vec<_> = creds.iter().filter(|c| c.is_suspended).collect();
         assert_eq!(suspended.len(), 1);
@@ -1247,8 +1251,10 @@ mod admin_get_credentials_tests {
     fn searches_by_roll_number() {
         // Test case: GET credentials with ?search=ABC filters results
 
-        let creds = [create_mock_webauthn_credential("ABC123", false),
-            create_mock_webauthn_credential("DEF456", false)];
+        let creds = [
+            create_mock_webauthn_credential("ABC123", false),
+            create_mock_webauthn_credential("DEF456", false),
+        ];
 
         let search = "ABC";
         let filtered: Vec<_> = creds
@@ -1379,8 +1385,10 @@ mod admin_stats_tests {
     fn returns_correct_statistics() {
         // Test case: GET /api/admin/webauthn/stats returns correct statistics
 
-        let creds = [create_mock_webauthn_credential("ABC123", false),
-            create_mock_webauthn_credential("DEF456", true)];
+        let creds = [
+            create_mock_webauthn_credential("ABC123", false),
+            create_mock_webauthn_credential("DEF456", true),
+        ];
 
         let total = creds.len() as i64;
         let suspended = creds.iter().filter(|c| c.is_suspended).count() as i64;
@@ -1397,7 +1405,6 @@ mod admin_stats_tests {
 // ============================================================================
 
 mod admin_rate_limiting_tests {
-    
 
     /// Test: should flag unusual reset activity (more than 10 in an hour)
     ///
@@ -2514,7 +2521,8 @@ mod webauthn_audit_logging_tests {
     fn tracks_multiple_actions_for_same_student() {
         // Test case: Multiple actions for the same student should be logged
 
-        let logs = [create_mock_reenrollment_log(
+        let logs = [
+            create_mock_reenrollment_log(
                 "MULTI001",
                 attendance_geotag_backend::models::WebAuthnReenrollmentAction::Suspend,
                 "First action",
@@ -2523,7 +2531,8 @@ mod webauthn_audit_logging_tests {
                 "MULTI001",
                 attendance_geotag_backend::models::WebAuthnReenrollmentAction::Unsuspend,
                 "Second action",
-            )];
+            ),
+        ];
 
         assert_eq!(logs.len(), 2);
         assert!(matches!(
@@ -2542,7 +2551,6 @@ mod webauthn_audit_logging_tests {
 // ============================================================================
 
 mod webauthn_error_handling_tests {
-    
 
     /// Test: should return user-friendly error for non-enrolled student
     ///

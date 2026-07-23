@@ -55,7 +55,10 @@ pub async fn create_short_link(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
     let sessions: Collection<Session> = db.collection(Session::collection_name());
@@ -158,7 +161,10 @@ pub async fn get_short_links(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
 
@@ -209,7 +215,10 @@ pub async fn get_short_link_by_code(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
     let sessions: Collection<Session> = db.collection(Session::collection_name());
@@ -279,7 +288,10 @@ pub async fn attach_short_link(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let short_links: Collection<ShortLink> = db.collection(ShortLink::collection_name());
     let sessions: Collection<Session> = db.collection(Session::collection_name());
@@ -295,9 +307,14 @@ pub async fn attach_short_link(
     // Check if the link is already attached to an active session
     if let Some(current_session_id) = link.session_id {
         if current_session_id != session_id {
-            if let Some(current_session) = sessions.find_one(doc! { "_id": current_session_id }).await? {
+            if let Some(current_session) = sessions
+                .find_one(doc! { "_id": current_session_id })
+                .await?
+            {
                 if current_session.is_active {
-                    return Err(AppError::BadRequest("Active session short link cannot be reassigned".to_string()));
+                    return Err(AppError::BadRequest(
+                        "Active session short link cannot be reassigned".to_string(),
+                    ));
                 }
             }
         }
@@ -353,7 +370,10 @@ pub async fn detach_short_link(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
 
@@ -385,7 +405,10 @@ pub async fn delete_short_link(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
 
@@ -412,7 +435,10 @@ pub async fn get_available_sessions(
             .mongodb_uri
             .split('/')
             .next_back()
-            .unwrap_or("default").split('?').next().unwrap_or("default"),
+            .unwrap_or("default")
+            .split('?')
+            .next()
+            .unwrap_or("default"),
     );
     let sessions: Collection<Session> = db.collection(Session::collection_name());
 
@@ -447,7 +473,10 @@ pub async fn resolve_short_link(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(ShortLink::collection_name());
 
@@ -484,7 +513,10 @@ pub async fn get_short_link_session(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(ShortLink::collection_name());
     let sessions: Collection<Session> = state
@@ -495,7 +527,10 @@ pub async fn get_short_link_session(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
 

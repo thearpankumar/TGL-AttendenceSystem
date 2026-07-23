@@ -7,7 +7,8 @@ use std::sync::Arc;
 use crate::{constants::*, error::Result, AppState};
 
 pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
-    Router::new().route("/verify", axum::routing::post(verify_device))
+    Router::new()
+        .route("/verify", axum::routing::post(verify_device))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             crate::middleware::student_rate_limit_middleware,

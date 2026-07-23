@@ -20,7 +20,7 @@ use crate::{
     models::{
         Attendance, AttendanceDeviceFlag, Device, EmulatorFlag, EmulatorFlagType, GpsAnomaly,
         GpsAnomalyType, GpsConfidence, IntegrityCheck, IntegrityCheckType, Location, PhotoHash,
-        Session, WebAuthnCredential, Severity,
+        Session, Severity, WebAuthnCredential,
     },
     services::{compute_image_hash, detect_faces, GpsPositionEntry, IpInfo},
     utils::{calculate_distance, is_same_photo},
@@ -124,7 +124,10 @@ pub async fn validate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -147,7 +150,10 @@ pub async fn validate_token(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Location::collection_name());
 
@@ -179,7 +185,10 @@ pub async fn check_attendance_status(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
     let attendances: Collection<Attendance> = state
@@ -190,7 +199,10 @@ pub async fn check_attendance_status(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Attendance::collection_name());
 
@@ -235,7 +247,10 @@ pub async fn get_upload_url(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Session::collection_name());
 
@@ -348,7 +363,10 @@ pub async fn submit_attendance(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let sessions: Collection<Session> = state
         .db
@@ -363,7 +381,8 @@ pub async fn submit_attendance(
         .database(db_name)
         .collection(Location::collection_name());
     let sys_config = state.get_system_config().await;
-    let is_dev_bypass_all = sys_config.dev_bypass_enabled || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
+    let is_dev_bypass_all = sys_config.dev_bypass_enabled
+        || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
 
     let token_hash = Session::hash_token(&token);
 
@@ -390,16 +409,17 @@ pub async fn submit_attendance(
     {
         // Grace period dynamically loaded from SystemConfig
         let enrolled_at = credential.enrolled_at;
-        let grace_period_end =
-            enrolled_at + chrono::Duration::minutes(sys_config.webauthn_config.grace_period_minutes);
+        let grace_period_end = enrolled_at
+            + chrono::Duration::minutes(sys_config.webauthn_config.grace_period_minutes);
 
         Utc::now() >= grace_period_end
     } else {
         false // No credential, no WebAuthn required
     };
 
-    if webauthn_required && !payload.webauthn_verified.unwrap_or(false) 
-        && !(is_dev_bypass_all && payload.dev_bypass_webauthn.unwrap_or(false)) 
+    if webauthn_required
+        && !payload.webauthn_verified.unwrap_or(false)
+        && !(is_dev_bypass_all && payload.dev_bypass_webauthn.unwrap_or(false))
     {
         return Err(AppError::Forbidden(
             "Security policy requires biometric authentication. Please use your enrolled device."
@@ -429,7 +449,8 @@ pub async fn submit_attendance(
         payload.longitude,
     );
 
-    let is_within_geofence = distance <= location.radius_meters || (is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
+    let is_within_geofence = distance <= location.radius_meters
+        || (is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
 
     let ip = addr.ip().to_string();
     let user_agent = headers
@@ -451,9 +472,11 @@ pub async fn submit_attendance(
     let has_high_severity_gps = gps_validation
         .anomalies
         .iter()
-        .any(|a| a.severity == Severity::High) && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
+        .any(|a| a.severity == Severity::High)
+        && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
     let has_security_flags = has_high_severity_gps
-        || ((emulator_detection.has_high_severity || emulator_detection.detected) && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
+        || ((emulator_detection.has_high_severity || emulator_detection.detected)
+            && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
 
     let (device_flag, flag_reason) = if has_high_severity_gps {
         let anomaly_types: Vec<&str> = gps_validation
@@ -697,67 +720,68 @@ pub async fn submit_attendance(
         .db
         .database(db_name)
         .collection(PhotoHash::collection_name());
-    let (photo_hash_value, photo_reuse_detected) =
-        if let Some(photo_public_id) = &payload.photo_public_id {
-            match state.storage.provider().download(photo_public_id).await {
-                Ok(image_data) => {
-                    // Compute perceptual hash
-                    let hash_result = compute_image_hash(&image_data);
-                    let hash_str = match hash_result {
-                        Ok(h) => Some(format!("{:016x}", h)),
-                        Err(e) => {
-                            tracing::warn!("Failed to compute photo hash: {}", e);
-                            None
-                        }
-                    };
+    let (photo_hash_value, photo_reuse_detected) = if let Some(photo_public_id) =
+        &payload.photo_public_id
+    {
+        match state.storage.provider().download(photo_public_id).await {
+            Ok(image_data) => {
+                // Compute perceptual hash
+                let hash_result = compute_image_hash(&image_data);
+                let hash_str = match hash_result {
+                    Ok(h) => Some(format!("{:016x}", h)),
+                    Err(e) => {
+                        tracing::warn!("Failed to compute photo hash: {}", e);
+                        None
+                    }
+                };
 
-                    // Check for reuse in same session
-                    let reuse_detected = if let Some(ref hash) = hash_str {
-                        if let Some(session_id) = session.id {
-                            match photo_hashes
-                                .find_one(doc! {
-                                    "sessionId": session_id,
-                                    "rollNumber": { "$ne": &roll_upper }
-                                })
-                                .await
-                            {
-                                Ok(Some(existing)) => {
-                                    // Compare with existing hash using similarity threshold from system_config
-                                    let existing_hash = existing.photo_hash;
-                                    let threshold = sys_config.photo_verification.similarity_threshold;
-                                    is_same_photo(hash, &existing_hash, threshold)
-                                }
-                                Ok(None) => false,
-                                Err(e) => {
-                                    tracing::warn!("Failed to check photo reuse: {}", e);
-                                    false
-                                }
+                // Check for reuse in same session
+                let reuse_detected = if let Some(ref hash) = hash_str {
+                    if let Some(session_id) = session.id {
+                        match photo_hashes
+                            .find_one(doc! {
+                                "sessionId": session_id,
+                                "rollNumber": { "$ne": &roll_upper }
+                            })
+                            .await
+                        {
+                            Ok(Some(existing)) => {
+                                // Compare with existing hash using similarity threshold from system_config
+                                let existing_hash = existing.photo_hash;
+                                let threshold = sys_config.photo_verification.similarity_threshold;
+                                is_same_photo(hash, &existing_hash, threshold)
                             }
-                        } else {
-                            false
+                            Ok(None) => false,
+                            Err(e) => {
+                                tracing::warn!("Failed to check photo reuse: {}", e);
+                                false
+                            }
                         }
                     } else {
                         false
-                    };
-
-                    if reuse_detected {
-                        tracing::warn!(
-                            "Photo reuse detected for roll_number={} in session={}",
-                            roll_upper,
-                            session.id.map(|id| id.to_hex()).unwrap_or_default()
-                        );
                     }
+                } else {
+                    false
+                };
 
-                    (hash_str, reuse_detected)
+                if reuse_detected {
+                    tracing::warn!(
+                        "Photo reuse detected for roll_number={} in session={}",
+                        roll_upper,
+                        session.id.map(|id| id.to_hex()).unwrap_or_default()
+                    );
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to download photo for hash computation: {}", e);
-                    (None, false)
-                }
+
+                (hash_str, reuse_detected)
             }
-        } else {
-            (None, false)
-        };
+            Err(e) => {
+                tracing::warn!("Failed to download photo for hash computation: {}", e);
+                (None, false)
+            }
+        }
+    } else {
+        (None, false)
+    };
 
     let attendance = Attendance {
         id: None,
@@ -793,7 +817,20 @@ pub async fn submit_attendance(
         flag_reviewed_by: None,
         flag_reviewed_at: None,
         flagged: should_flag,
-        flag_reason: if is_dev_bypass_all && (payload.dev_bypass_camera.unwrap_or(false) || payload.dev_bypass_gps.unwrap_or(false) || payload.dev_bypass_webauthn.unwrap_or(false)) { Some(format!("Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}", payload.dev_bypass_camera.unwrap_or(false), payload.dev_bypass_gps.unwrap_or(false), payload.dev_bypass_webauthn.unwrap_or(false))) } else { flag_reason.clone() },
+        flag_reason: if is_dev_bypass_all
+            && (payload.dev_bypass_camera.unwrap_or(false)
+                || payload.dev_bypass_gps.unwrap_or(false)
+                || payload.dev_bypass_webauthn.unwrap_or(false))
+        {
+            Some(format!(
+                "Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}",
+                payload.dev_bypass_camera.unwrap_or(false),
+                payload.dev_bypass_gps.unwrap_or(false),
+                payload.dev_bypass_webauthn.unwrap_or(false)
+            ))
+        } else {
+            flag_reason.clone()
+        },
         flag_details: flag_reason,
         captured_at: Utc::now(),
         gps_accuracy: gps_metadata.and_then(|g| g.accuracy),

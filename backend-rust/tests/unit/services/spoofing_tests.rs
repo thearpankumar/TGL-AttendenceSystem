@@ -276,9 +276,8 @@ mod tests {
         if let Some(ref ch_mobile) = request.sec_ch_ua_mobile {
             let ch_says_mobile = ch_mobile == "?1";
             if ua_claims_mobile && !ch_says_mobile {
-                inconsistencies.push(
-                    "Server: UA claims mobile but Sec-CH-UA-Mobile disagrees".to_string(),
-                );
+                inconsistencies
+                    .push("Server: UA claims mobile but Sec-CH-UA-Mobile disagrees".to_string());
             }
         }
 

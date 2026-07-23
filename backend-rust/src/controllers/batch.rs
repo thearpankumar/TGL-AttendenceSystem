@@ -65,7 +65,10 @@ pub async fn create_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -113,7 +116,10 @@ pub async fn get_batches(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -153,7 +159,10 @@ pub async fn get_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -189,7 +198,10 @@ pub async fn delete_batch(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -272,7 +284,10 @@ pub async fn upload_batch_excel(
                 .mongodb_uri
                 .split('/')
                 .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
+                .unwrap_or("default")
+                .split('?')
+                .next()
+                .unwrap_or("default"),
         )
         .collection(Batch::collection_name());
 
@@ -307,7 +322,11 @@ fn format_cell(cell: &calamine::Data) -> Option<String> {
     match cell {
         calamine::Data::String(s) => {
             let trimmed = s.trim().to_string();
-            if trimmed.is_empty() { None } else { Some(trimmed) }
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
         }
         calamine::Data::Int(n) => Some(n.to_string()),
         calamine::Data::Float(f) => {
@@ -364,7 +383,9 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
     } else if let Ok(text) = std::str::from_utf8(data) {
         for line in text.lines() {
             let line = line.trim();
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
             let cells: Vec<String> = line
                 .split(',')
                 .map(|s| s.trim_matches('"').trim().to_string())
@@ -374,7 +395,9 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
             }
         }
     } else {
-        return Err(AppError::BadRequest("Failed to open file. Unsupported or corrupted spreadsheet/CSV format.".to_string()));
+        return Err(AppError::BadRequest(
+            "Failed to open file. Unsupported or corrupted spreadsheet/CSV format.".to_string(),
+        ));
     }
 
     let mut students = Vec::new();
@@ -385,26 +408,62 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
     }
 
     let roll_aliases = [
-        "roll", "rollno", "rollnumber", "rollnum",
-        "register", "registerno", "registernumber", "regno", "regnumber", "regnno", "regnum",
-        "registration", "registrationno", "registrationnumber", "registrationnum",
-        "id", "studentid", "studentno", "stdid",
-        "enrollment", "enrollmentno", "enrollmentnumber", "enrolment", "enrolmentno", "enrolmentnumber",
-        "usn", "hallticket", "hallticketno", "htno",
-        "slno", "sno", "srno", "serialno",
+        "roll",
+        "rollno",
+        "rollnumber",
+        "rollnum",
+        "register",
+        "registerno",
+        "registernumber",
+        "regno",
+        "regnumber",
+        "regnno",
+        "regnum",
+        "registration",
+        "registrationno",
+        "registrationnumber",
+        "registrationnum",
+        "id",
+        "studentid",
+        "studentno",
+        "stdid",
+        "enrollment",
+        "enrollmentno",
+        "enrollmentnumber",
+        "enrolment",
+        "enrolmentno",
+        "enrolmentnumber",
+        "usn",
+        "hallticket",
+        "hallticketno",
+        "htno",
+        "slno",
+        "sno",
+        "srno",
+        "serialno",
     ];
 
     let name_aliases = [
-        "name", "studentname", "fullname", "student", "nameofthestudent",
-        "candidate", "candidatename", "stname",
+        "name",
+        "studentname",
+        "fullname",
+        "student",
+        "nameofthestudent",
+        "candidate",
+        "candidatename",
+        "stname",
     ];
 
-    let email_aliases = [
-        "email", "emailid", "emailaddress", "mail", "mailid",
-    ];
+    let email_aliases = ["email", "emailid", "emailaddress", "mail", "mailid"];
 
     let college_aliases = [
-        "college", "collegename", "institution", "institute", "dept", "department", "branch",
+        "college",
+        "collegename",
+        "institution",
+        "institute",
+        "dept",
+        "department",
+        "branch",
     ];
 
     let mut name_col: Option<usize> = None;
@@ -427,7 +486,11 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
         }
     }
 
-    let start_row_idx = if name_col.is_some() || roll_col.is_some() { 1 } else { 0 };
+    let start_row_idx = if name_col.is_some() || roll_col.is_some() {
+        1
+    } else {
+        0
+    };
 
     // 2. Fallback heuristic if headers were not explicitly matched:
     if name_col.is_none() || roll_col.is_none() {
@@ -463,7 +526,8 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
 
     for (row_offset, row) in raw_rows.iter().skip(start_row_idx).enumerate() {
         let get_val = |col: Option<usize>| -> Option<String> {
-            col.and_then(|i| row.get(i).map(|s| s.trim().to_string())).filter(|s| !s.is_empty())
+            col.and_then(|i| row.get(i).map(|s| s.trim().to_string()))
+                .filter(|s| !s.is_empty())
         };
 
         let name = get_val(name_col);
@@ -501,7 +565,10 @@ mod batch_tests {
     #[test]
     fn test_normalize_header() {
         assert_eq!(normalize_header("Register No."), "registerno");
-        assert_eq!(normalize_header("Registration Number"), "registrationnumber");
+        assert_eq!(
+            normalize_header("Registration Number"),
+            "registrationnumber"
+        );
         assert_eq!(normalize_header("Roll No."), "rollno");
         assert_eq!(normalize_header("Reg. No"), "regno");
         assert_eq!(normalize_header("Student ID"), "studentid");
@@ -523,13 +590,17 @@ mod batch_tests {
 
     #[test]
     fn test_parse_csv_name_first_registration_second() {
-        let csv_data = b"Full Name,Registration No.,Department\nCharlie Brown,REG2024001,Computer Science\n";
+        let csv_data =
+            b"Full Name,Registration No.,Department\nCharlie Brown,REG2024001,Computer Science\n";
         let (students, errors) = parse_excel(csv_data).unwrap();
         assert!(errors.is_empty());
         assert_eq!(students.len(), 1);
         assert_eq!(students[0].name, "Charlie Brown");
         assert_eq!(students[0].roll_number, "REG2024001");
-        assert_eq!(students[0].college_name.as_deref(), Some("Computer Science"));
+        assert_eq!(
+            students[0].college_name.as_deref(),
+            Some("Computer Science")
+        );
     }
 
     #[test]

@@ -41,7 +41,8 @@ pub mod optional_chrono_bson {
     {
         #[derive(Serialize)]
         struct Helper<'a>(
-            #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")] &'a DateTime<Utc>,
+            #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")]
+            &'a DateTime<Utc>,
         );
 
         date.as_ref().map(Helper).serialize(serializer)

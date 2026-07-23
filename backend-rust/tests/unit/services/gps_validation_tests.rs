@@ -136,7 +136,6 @@ mod tests {
     // ============================================
 
     mod accuracy_detection {
-        
 
         #[test]
         fn should_flag_accuracy_below_3m_as_very_suspicious() {
@@ -200,7 +199,6 @@ mod tests {
     // ============================================
 
     mod altitude_detection {
-        
 
         #[test]
         fn should_flag_zero_altitude() {
@@ -391,8 +389,10 @@ mod tests {
         #[test]
         fn should_handle_multiple_anomalies() {
             // Node.js test: "should handle multiple anomalies"
-            let anomalies = [GpsAnomaly::new("ACCURACY_VERY_SUSPICIOUS", "high", "Accuracy 2m"),
-                GpsAnomaly::new("ALTITUDE_ZERO", "medium", "Altitude 0")];
+            let anomalies = [
+                GpsAnomaly::new("ACCURACY_VERY_SUSPICIOUS", "high", "Accuracy 2m"),
+                GpsAnomaly::new("ALTITUDE_ZERO", "medium", "Altitude 0"),
+            ];
             assert_eq!(anomalies.len(), 2, "Should have 2 anomalies");
         }
 

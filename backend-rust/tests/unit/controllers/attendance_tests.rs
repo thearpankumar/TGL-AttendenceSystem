@@ -111,7 +111,12 @@ impl MockSession {
             expires_at,
             is_active: true,
         };
-        let _ = (&s.location_id, &s.token_hash, &s.token_prefix, &s.created_by);
+        let _ = (
+            &s.location_id,
+            &s.token_hash,
+            &s.token_prefix,
+            &s.created_by,
+        );
         s
     }
 

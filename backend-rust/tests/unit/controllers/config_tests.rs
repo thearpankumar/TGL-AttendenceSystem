@@ -15,7 +15,6 @@ use chrono::Utc;
 use mongodb::bson::oid::ObjectId;
 
 mod get_config_tests {
-    
 
     #[test]
     fn should_return_default_config_if_none_exists() {
@@ -137,7 +136,10 @@ mod toggle_dev_bypass_tests {
 
         // The response structure is validated
         let expected_message = "Developer Bypass Mode updated successfully";
-        assert_eq!(expected_message, "Developer Bypass Mode updated successfully");
+        assert_eq!(
+            expected_message,
+            "Developer Bypass Mode updated successfully"
+        );
 
         // Verify the expected response structure exists
         // Response includes: { message: String, config: SystemConfig }
@@ -347,7 +349,8 @@ mod new_config_fields_tests {
             }
         });
 
-        let config: SystemConfig = serde_json::from_value(legacy_json).expect("Failed to deserialize legacy config");
+        let config: SystemConfig =
+            serde_json::from_value(legacy_json).expect("Failed to deserialize legacy config");
         assert!(config.dev_bypass_enabled);
         // Verify new fields fall back to Default
         assert_eq!(config.rate_limits.admin_max_requests, 1000);

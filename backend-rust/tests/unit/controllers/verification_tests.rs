@@ -1263,7 +1263,6 @@ mod dto_tests {
 // ============================================================================
 
 mod error_response_tests {
-    
 
     /// Test: 400 Bad Request response structure
     #[test]

@@ -12,11 +12,11 @@
 
 #[cfg(test)]
 mod tests {
-    use attendance_geotag_backend::middleware::{generate_token, verify_token, Claims};
     use attendance_geotag_backend::middleware::validators::{
         is_alphanumeric, is_valid_email, is_valid_objectid, AdminLoginRequest,
         AdminRegisterRequest, AttendanceSubmitRequest, LocationCreateRequest, SessionCreateRequest,
     };
+    use attendance_geotag_backend::middleware::{generate_token, verify_token, Claims};
 
     // Test constants matching Node.js setup
     const JWT_SECRET: &str = "test-secret-key-for-testing";

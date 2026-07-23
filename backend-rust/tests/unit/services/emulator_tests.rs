@@ -214,7 +214,6 @@ mod gpu_detection {
 }
 
 mod device_memory_detection {
-    
 
     /// Ported from: "should flag very low memory (< 2GB)"
     /// Node.js test: expect(deviceMemory).toBeLessThan(2);
@@ -280,7 +279,6 @@ mod touch_points_detection {
 }
 
 mod platform_inconsistency_detection {
-    
 
     /// Ported from: "should detect iPhone UA with Windows platform"
     /// Node.js test checks isiPhone && isWindows combination
@@ -354,8 +352,10 @@ mod client_side_emulation_detection {
     /// Node.js test: expect(clientFlags.length).toBe(2);
     #[test]
     fn should_handle_client_reported_inconsistencies() {
-        let client_flags = [EmulatorFlag::new("MEMORY_SUSPICIOUS", "Very low memory"),
-            EmulatorFlag::new("TOUCH_MISMATCH", "Mobile UA but no touch")];
+        let client_flags = [
+            EmulatorFlag::new("MEMORY_SUSPICIOUS", "Very low memory"),
+            EmulatorFlag::new("TOUCH_MISMATCH", "Mobile UA but no touch"),
+        ];
         assert_eq!(client_flags.len(), 2);
     }
 }
@@ -368,16 +368,8 @@ mod combine_flags {
     #[test]
     fn should_combine_multiple_flags_correctly() {
         let flags: Vec<EmulatorFlag> = vec![
-            EmulatorFlag::with_severity(
-                "GPU_EMULATOR",
-                "Emulator GPU detected",
-                "high",
-            ),
-            EmulatorFlag::with_severity(
-                "MEMORY_SUSPICIOUS",
-                "Suspicious memory",
-                "medium",
-            ),
+            EmulatorFlag::with_severity("GPU_EMULATOR", "Emulator GPU detected", "high"),
+            EmulatorFlag::with_severity("MEMORY_SUSPICIOUS", "Suspicious memory", "medium"),
         ];
 
         assert_eq!(flags.len(), 2);

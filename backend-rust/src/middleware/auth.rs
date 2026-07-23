@@ -88,7 +88,10 @@ pub async fn auth_middleware(
         .mongodb_uri
         .split('/')
         .next_back()
-        .unwrap_or("default").split('?').next().unwrap_or("default");
+        .unwrap_or("default")
+        .split('?')
+        .next()
+        .unwrap_or("default");
 
     let collection: Collection<Admin> = state
         .db

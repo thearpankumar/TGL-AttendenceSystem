@@ -210,7 +210,9 @@ impl StorageProvider for CloudinaryProvider {
             match mock.upload_result.lock().unwrap().clone() {
                 Some(Ok(res)) => Ok(res),
                 Some(Err(e)) => Err(MockError(format!("Cloudinary upload failed: {}", e.0))),
-                None => Err(MockError("Cloudinary upload failed: No mock result set".to_string())),
+                None => Err(MockError(
+                    "Cloudinary upload failed: No mock result set".to_string(),
+                )),
             }
         } else {
             Err(MockError(
@@ -908,7 +910,10 @@ mod s3_provider {
         let provider = create_test_provider(mock);
 
         let result = provider
-            .upload("data:image/jpeg;base64,SGVsbG8gV29ybGQ=", UploadOptions::default())
+            .upload(
+                "data:image/jpeg;base64,SGVsbG8gV29ybGQ=",
+                UploadOptions::default(),
+            )
             .await;
 
         assert!(result.is_err());

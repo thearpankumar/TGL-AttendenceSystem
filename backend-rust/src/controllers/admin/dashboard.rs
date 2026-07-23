@@ -282,9 +282,7 @@ pub async fn get_dashboard_stats(
     }
 
     // Get sessions for this admin
-    let mut sessions_cursor = sessions_collection
-        .find(session_filter)
-        .await?;
+    let mut sessions_cursor = sessions_collection.find(session_filter).await?;
 
     let mut session_ids = Vec::new();
     let mut session_batch_map: std::collections::HashMap<

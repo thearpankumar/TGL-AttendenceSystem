@@ -108,9 +108,9 @@ mod tests {
                 let limiter = Arc::clone(&rate_limiter);
                 let ip = test_ip.to_string();
 
-                handles.push(tokio::spawn(
-                    async move { limiter.login_rate_limit(&ip, 5, 60).await },
-                ));
+                handles.push(tokio::spawn(async move {
+                    limiter.login_rate_limit(&ip, 5, 60).await
+                }));
             }
 
             // Wait for all requests
