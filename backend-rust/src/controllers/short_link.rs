@@ -36,6 +36,12 @@ pub struct ShortLinkResponse {
     pub session_id: Option<String>,
     #[serde(rename = "expiresAt")]
     pub expires_at: Option<String>,
+    #[serde(rename = "isActive")]
+    pub is_active: bool,
+    #[serde(rename = "clickCount")]
+    pub click_count: i32,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
 }
 
 pub async fn create_short_link(
@@ -126,6 +132,9 @@ pub async fn create_short_link(
             url: format!("{}/s/{}", state.config.webauthn.origin, short_code),
             session_id: session_id.map(|id| id.to_hex()),
             expires_at: expires_at.map(|d| d.to_rfc3339()),
+            is_active: true,
+            click_count: 0,
+            created_at: Utc::now().to_rfc3339(),
         }),
     ))
 }
@@ -180,6 +189,9 @@ pub async fn get_short_links(
             url: format!("{}/s/{}", state.config.webauthn.origin, link.short_code),
             session_id: link.session_id.map(|id| id.to_hex()),
             expires_at: link.expires_at.map(|d| d.to_rfc3339()),
+            is_active: link.is_active,
+            click_count: link.click_count,
+            created_at: link.created_at.to_rfc3339(),
         });
     }
 
@@ -249,6 +261,7 @@ pub async fn get_short_link_by_code(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AttachRequest {
     pub session_id: String,
     pub force: Option<bool>,
@@ -278,6 +291,17 @@ pub async fn attach_short_link(
 
     let session_id = ObjectId::parse_str(&payload.session_id)
         .map_err(|_| AppError::BadRequest("Invalid session ID format".to_string()))?;
+
+    // Check if the link is already attached to an active session
+    if let Some(current_session_id) = link.session_id {
+        if current_session_id != session_id {
+            if let Some(current_session) = sessions.find_one(doc! { "_id": current_session_id }).await? {
+                if current_session.is_active {
+                    return Err(AppError::BadRequest("Active session short link cannot be reassigned".to_string()));
+                }
+            }
+        }
+    }
 
     let _session = sessions
         .find_one(doc! { "_id": session_id, "createdBy": auth.id })

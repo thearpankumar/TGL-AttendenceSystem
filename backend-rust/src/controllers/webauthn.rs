@@ -330,7 +330,7 @@ pub async fn get_webauthn_stats(
 
 #[cfg(test)]
 mod payload_tests {
-    use super::*;
+
     use serde_json::json;
 
     #[test]

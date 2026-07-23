@@ -46,14 +46,17 @@ pub struct WebAuthnCredential {
     pub created_by_admin_id: Option<ObjectId>,
     #[serde(default)]
     pub sign_count: u32,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub last_used_at: Option<DateTime<Utc>>,
     pub last_session_id: Option<ObjectId>,
     #[serde(default)]
     pub is_suspended: bool,
     pub suspended_reason: Option<String>,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub suspended_at: Option<DateTime<Utc>>,
     pub suspended_by: Option<ObjectId>,
     pub aaguid: Option<String>,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub reset_at: Option<DateTime<Utc>>,
     pub reset_by: Option<ObjectId>,
 }

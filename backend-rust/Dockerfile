@@ -1,7 +1,7 @@
 # ==============================================================================
 # Stage 1: Model Downloader
 # ==============================================================================
-FROM rust:1.97-slim as model-builder
+FROM rust:1.97-slim AS model-builder
 
 WORKDIR /builder
 # Install pkg-config, libssl-dev, and build-essential which are often required for Rust crypto/networking crates

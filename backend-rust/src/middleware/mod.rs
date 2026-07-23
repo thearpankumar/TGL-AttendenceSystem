@@ -29,7 +29,8 @@ pub use gps_validation::{
 };
 pub use mobile_check::{check_mobile, detect_ua_spoofing, mobile_check_middleware, DeviceInfo};
 pub use rate_limit_middleware::{
-    admin_rate_limit_middleware, login_rate_limit_middleware, student_rate_limit_middleware,
+    admin_rate_limit_middleware, client_log_rate_limit_middleware, login_rate_limit_middleware,
+    student_rate_limit_middleware,
 };
 pub use rate_limiter::RateLimiter;
 pub use security_extractors::{

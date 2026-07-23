@@ -65,7 +65,12 @@ pub async fn login_rate_limit_middleware(
 ) -> Response {
     let ip = get_client_ip(&request);
 
-    let allowed = state.rate_limiter.login_rate_limit(&ip).await;
+    let config = state.get_system_config().await;
+    let allowed = state.rate_limiter.login_rate_limit(
+        &ip,
+        config.rate_limits.login_max_requests,
+        config.rate_limits.login_window_secs,
+    ).await;
 
     if !allowed {
         return rate_limit_exceeded_response("login");
@@ -82,7 +87,12 @@ pub async fn admin_rate_limit_middleware(
 ) -> Response {
     let ip = get_client_ip(&request);
 
-    let allowed = state.rate_limiter.admin_rate_limit(&ip).await;
+    let config = state.get_system_config().await;
+    let allowed = state.rate_limiter.admin_rate_limit(
+        &ip,
+        config.rate_limits.admin_max_requests,
+        config.rate_limits.admin_window_secs,
+    ).await;
 
     if !allowed {
         return rate_limit_exceeded_response("admin");
@@ -99,10 +109,37 @@ pub async fn student_rate_limit_middleware(
 ) -> Response {
     let ip = get_client_ip(&request);
 
-    let allowed = state.rate_limiter.student_rate_limit(&ip).await;
+    let config = state.get_system_config().await;
+    let allowed = state.rate_limiter.student_rate_limit(
+        &ip,
+        config.rate_limits.student_max_requests,
+        config.rate_limits.student_window_secs,
+    ).await;
 
     if !allowed {
         return rate_limit_exceeded_response("student");
+    }
+
+    next.run(request).await
+}
+
+/// Rate limiting middleware for client log routes
+pub async fn client_log_rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let ip = get_client_ip(&request);
+
+    let config = state.get_system_config().await;
+    let allowed = state.rate_limiter.client_log_rate_limit(
+        &ip,
+        config.rate_limits.client_log_max_requests,
+        config.rate_limits.client_log_window_secs,
+    ).await;
+
+    if !allowed {
+        return rate_limit_exceeded_response("client_log");
     }
 
     next.run(request).await

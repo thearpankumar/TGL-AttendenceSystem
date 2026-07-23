@@ -292,3 +292,65 @@ mod jwt_token_tests {
         assert!(result.is_err());
     }
 }
+
+mod new_config_fields_tests {
+    use attendance_geotag_backend::models::SystemConfig;
+
+    #[test]
+    fn should_have_valid_default_rate_limits() {
+        let config = SystemConfig::default();
+        let limits = config.rate_limits;
+        assert_eq!(limits.admin_window_secs, 60);
+        assert_eq!(limits.admin_max_requests, 1000);
+        assert_eq!(limits.student_window_secs, 60);
+        assert_eq!(limits.student_max_requests, 100);
+        assert_eq!(limits.login_window_secs, 60);
+        assert_eq!(limits.login_max_requests, 20);
+        assert_eq!(limits.client_log_window_secs, 60);
+        assert_eq!(limits.client_log_max_requests, 100);
+    }
+
+    #[test]
+    fn should_have_valid_default_webauthn_config() {
+        let config = SystemConfig::default();
+        assert_eq!(config.webauthn_config.grace_period_minutes, 15);
+    }
+
+    #[test]
+    fn should_have_valid_default_photo_verification() {
+        let config = SystemConfig::default();
+        assert_eq!(config.photo_verification.similarity_threshold, 0.15);
+        assert_eq!(config.photo_verification.high_similarity_threshold, 0.85);
+    }
+
+    #[test]
+    fn should_deserialize_legacy_config_without_new_fields() {
+        // Simulates old DB format missing new nested configs
+        let legacy_json = serde_json::json!({
+            "devBypassEnabled": true,
+            "gpsValidation": {
+                "enabled": true,
+                "accuracyVerySuspicious": 3.0,
+                "accuracySuspicious": 10.0,
+                "speedThreshold": 50.0,
+                "timestampDriftMax": 60000,
+                "positionJumpThreshold": 500.0,
+                "altitudeZeroPenalty": true
+            },
+            "emulatorDetection": {
+                "enabled": true,
+                "blockOnHighSeverity": false
+            },
+            "trustScore": {
+                "anomalyPenalty": 15.0,
+                "safeReviewBonus": 10.0
+            }
+        });
+
+        let config: SystemConfig = serde_json::from_value(legacy_json).expect("Failed to deserialize legacy config");
+        assert!(config.dev_bypass_enabled);
+        // Verify new fields fall back to Default
+        assert_eq!(config.rate_limits.admin_max_requests, 1000);
+        assert_eq!(config.webauthn_config.grace_period_minutes, 15);
+    }
+}

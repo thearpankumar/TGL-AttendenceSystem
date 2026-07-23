@@ -23,5 +23,5 @@ pub use public_webauthn::{
     finish_authentication, finish_registration, get_captcha as get_shortlink_captcha,
     get_upload_url as get_shortlink_upload_url, get_webauthn_status, start_authentication,
     start_conditional_authentication, start_registration,
-    submit_attendance as submit_shortlink_attendance,
 };
+

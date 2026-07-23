@@ -13,9 +13,11 @@ pub struct ShortLink {
     pub created_by: ObjectId,
     #[serde(default = "default_true")]
     pub is_active: bool,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub expires_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub click_count: i32,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub last_clicked_at: Option<DateTime<Utc>>,
     #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")]
     pub created_at: DateTime<Utc>,

@@ -46,6 +46,9 @@ pub struct SubmitAttendanceRequest {
     pub captcha_answer: Option<String>,
     pub captcha_id: Option<String>,
     pub gps_metadata: Option<GpsMetadataPayload>,
+    pub dev_bypass_camera: Option<bool>,
+    pub dev_bypass_gps: Option<bool>,
+    pub dev_bypass_webauthn: Option<bool>,
 }
 
 fn verify_captcha(captcha_answer: &str, captcha_id: &str, jwt_secret: &str) -> Result<()> {
@@ -359,6 +362,8 @@ pub async fn submit_attendance(
         .db
         .database(db_name)
         .collection(Location::collection_name());
+    let sys_config = state.get_system_config().await;
+    let is_dev_bypass_all = sys_config.dev_bypass_enabled || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
 
     let token_hash = Session::hash_token(&token);
 
@@ -383,17 +388,19 @@ pub async fn submit_attendance(
         .find_one(doc! { "studentId": &roll_upper })
         .await?
     {
-        // Grace period: 15 minutes after enrollment
+        // Grace period dynamically loaded from SystemConfig
         let enrolled_at = credential.enrolled_at;
         let grace_period_end =
-            enrolled_at + chrono::Duration::minutes(WEBAUTHN_GRACE_PERIOD_MINUTES);
+            enrolled_at + chrono::Duration::minutes(sys_config.webauthn_config.grace_period_minutes);
 
         Utc::now() >= grace_period_end
     } else {
         false // No credential, no WebAuthn required
     };
 
-    if webauthn_required && !payload.webauthn_verified.unwrap_or(false) {
+    if webauthn_required && !payload.webauthn_verified.unwrap_or(false) 
+        && !(is_dev_bypass_all && payload.dev_bypass_webauthn.unwrap_or(false)) 
+    {
         return Err(AppError::Forbidden(
             "Security policy requires biometric authentication. Please use your enrolled device."
                 .to_string(),
@@ -422,7 +429,7 @@ pub async fn submit_attendance(
         payload.longitude,
     );
 
-    let is_within_geofence = distance <= location.radius_meters;
+    let is_within_geofence = distance <= location.radius_meters || (is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
 
     let ip = addr.ip().to_string();
     let user_agent = headers
@@ -444,10 +451,9 @@ pub async fn submit_attendance(
     let has_high_severity_gps = gps_validation
         .anomalies
         .iter()
-        .any(|a| a.severity == Severity::High);
+        .any(|a| a.severity == Severity::High) && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
     let has_security_flags = has_high_severity_gps
-        || emulator_detection.has_high_severity
-        || emulator_detection.detected;
+        || ((emulator_detection.has_high_severity || emulator_detection.detected) && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
 
     let (device_flag, flag_reason) = if has_high_severity_gps {
         let anomaly_types: Vec<&str> = gps_validation
@@ -652,7 +658,9 @@ pub async fn submit_attendance(
         .collect();
 
     // Perform face detection if photo_url is provided
-    let face_detected_result = if let (Some(photo_public_id), true) =
+    let face_detected_result = if is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false) {
+        Some(true)
+    } else if let (Some(photo_public_id), true) =
         (&payload.photo_public_id, payload.photo_url.is_some())
     {
         match state.storage.provider().download(photo_public_id).await {
@@ -714,9 +722,9 @@ pub async fn submit_attendance(
                                 .await
                             {
                                 Ok(Some(existing)) => {
-                                    // Compare with existing hash using similarity threshold
+                                    // Compare with existing hash using similarity threshold from system_config
                                     let existing_hash = existing.photo_hash;
-                                    let threshold = PHOTO_SIMILARITY_THRESHOLD;
+                                    let threshold = sys_config.photo_verification.similarity_threshold;
                                     is_same_photo(hash, &existing_hash, threshold)
                                 }
                                 Ok(None) => false,
@@ -785,7 +793,7 @@ pub async fn submit_attendance(
         flag_reviewed_by: None,
         flag_reviewed_at: None,
         flagged: should_flag,
-        flag_reason: flag_reason.clone(),
+        flag_reason: if is_dev_bypass_all && (payload.dev_bypass_camera.unwrap_or(false) || payload.dev_bypass_gps.unwrap_or(false) || payload.dev_bypass_webauthn.unwrap_or(false)) { Some(format!("Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}", payload.dev_bypass_camera.unwrap_or(false), payload.dev_bypass_gps.unwrap_or(false), payload.dev_bypass_webauthn.unwrap_or(false))) } else { flag_reason.clone() },
         flag_details: flag_reason,
         captured_at: Utc::now(),
         gps_accuracy: gps_metadata.and_then(|g| g.accuracy),

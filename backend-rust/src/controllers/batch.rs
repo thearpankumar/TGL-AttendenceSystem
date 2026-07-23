@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
     Extension,
 };
-use calamine::{open_workbook_from_rs, Reader, Xlsx};
+use calamine::{open_workbook_from_rs, Ods, Reader, Xls, Xlsx};
 use chrono::{DateTime, Utc};
 use mongodb::{
     bson::{doc, oid::ObjectId},
@@ -205,9 +205,12 @@ pub async fn delete_batch(
 
 #[derive(Debug, Serialize)]
 pub struct UploadBatchResponse {
+    #[serde(rename = "batchId")]
     pub batch_id: String,
     pub name: String,
+    #[serde(rename = "studentsImported")]
     pub students_imported: usize,
+    #[serde(rename = "studentsSkipped")]
     pub students_skipped: usize,
     pub errors: Vec<String>,
 }
@@ -300,68 +303,173 @@ pub async fn upload_batch_excel(
     ))
 }
 
+fn format_cell(cell: &calamine::Data) -> Option<String> {
+    match cell {
+        calamine::Data::String(s) => {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() { None } else { Some(trimmed) }
+        }
+        calamine::Data::Int(n) => Some(n.to_string()),
+        calamine::Data::Float(f) => {
+            if f.fract() == 0.0 {
+                Some((*f as i64).to_string())
+            } else {
+                Some(f.to_string())
+            }
+        }
+        calamine::Data::DateTime(d) => Some(d.to_string()),
+        calamine::Data::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+fn normalize_header(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect()
+}
+
 fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
     let cursor = Cursor::new(data);
-    let mut workbook: Xlsx<_> = open_workbook_from_rs(cursor)
-        .map_err(|e| AppError::BadRequest(format!("Failed to open Excel file: {}", e)))?;
+    let mut raw_rows: Vec<Vec<String>> = Vec::new();
 
-    let range = workbook
-        .worksheet_range_at(0)
-        .ok_or_else(|| AppError::BadRequest("No worksheet found".to_string()))?
-        .map_err(|e| AppError::BadRequest(format!("Failed to read worksheet: {}", e)))?;
+    if let Ok(mut wb) = open_workbook_from_rs::<Xlsx<_>, _>(cursor.clone()) {
+        if let Some(Ok(range)) = wb.worksheet_range_at(0) {
+            for row in range.rows() {
+                let cells: Vec<String> = row.iter().filter_map(format_cell).collect();
+                if !cells.is_empty() {
+                    raw_rows.push(cells);
+                }
+            }
+        }
+    } else if let Ok(mut wb) = open_workbook_from_rs::<Xls<_>, _>(cursor.clone()) {
+        if let Some(Ok(range)) = wb.worksheet_range_at(0) {
+            for row in range.rows() {
+                let cells: Vec<String> = row.iter().filter_map(format_cell).collect();
+                if !cells.is_empty() {
+                    raw_rows.push(cells);
+                }
+            }
+        }
+    } else if let Ok(mut wb) = open_workbook_from_rs::<Ods<_>, _>(cursor.clone()) {
+        if let Some(Ok(range)) = wb.worksheet_range_at(0) {
+            for row in range.rows() {
+                let cells: Vec<String> = row.iter().filter_map(format_cell).collect();
+                if !cells.is_empty() {
+                    raw_rows.push(cells);
+                }
+            }
+        }
+    } else if let Ok(text) = std::str::from_utf8(data) {
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() { continue; }
+            let cells: Vec<String> = line
+                .split(',')
+                .map(|s| s.trim_matches('"').trim().to_string())
+                .collect();
+            if !cells.is_empty() {
+                raw_rows.push(cells);
+            }
+        }
+    } else {
+        return Err(AppError::BadRequest("Failed to open file. Unsupported or corrupted spreadsheet/CSV format.".to_string()));
+    }
 
     let mut students = Vec::new();
     let mut errors = Vec::new();
 
-    let rows: Vec<_> = range.rows().collect();
-
-    if rows.is_empty() {
+    if raw_rows.is_empty() {
         return Ok((students, errors));
     }
 
-    let header_row = rows[0];
-    let mut col_map = std::collections::HashMap::new();
+    let roll_aliases = [
+        "roll", "rollno", "rollnumber", "rollnum",
+        "register", "registerno", "registernumber", "regno", "regnumber", "regnno", "regnum",
+        "registration", "registrationno", "registrationnumber", "registrationnum",
+        "id", "studentid", "studentno", "stdid",
+        "enrollment", "enrollmentno", "enrollmentnumber", "enrolment", "enrolmentno", "enrolmentnumber",
+        "usn", "hallticket", "hallticketno", "htno",
+        "slno", "sno", "srno", "serialno",
+    ];
 
-    for (i, cell) in header_row.iter().enumerate() {
-        let header_str = match cell {
-            calamine::Data::String(s) => s.clone(),
-            _ => continue,
-        };
-        // Normalize: lowercase and remove all spaces, underscores, hyphens
-        let header_norm = header_str
-            .to_lowercase()
-            .replace([' ', '_', '-'], "");
-        col_map.insert(header_norm, i);
+    let name_aliases = [
+        "name", "studentname", "fullname", "student", "nameofthestudent",
+        "candidate", "candidatename", "stname",
+    ];
+
+    let email_aliases = [
+        "email", "emailid", "emailaddress", "mail", "mailid",
+    ];
+
+    let college_aliases = [
+        "college", "collegename", "institution", "institute", "dept", "department", "branch",
+    ];
+
+    let mut name_col: Option<usize> = None;
+    let mut roll_col: Option<usize> = None;
+    let mut email_col: Option<usize> = None;
+    let mut college_col: Option<usize> = None;
+
+    // 1. Header row matching
+    let header_row = &raw_rows[0];
+    for (i, cell_str) in header_row.iter().enumerate() {
+        let norm = normalize_header(cell_str);
+        if name_col.is_none() && name_aliases.contains(&norm.as_str()) {
+            name_col = Some(i);
+        } else if roll_col.is_none() && roll_aliases.contains(&norm.as_str()) {
+            roll_col = Some(i);
+        } else if email_col.is_none() && email_aliases.contains(&norm.as_str()) {
+            email_col = Some(i);
+        } else if college_col.is_none() && college_aliases.contains(&norm.as_str()) {
+            college_col = Some(i);
+        }
     }
 
-    let name_col = col_map
-        .get("name")
-        .or_else(|| col_map.get("studentname"));
-    let roll_col = col_map
-        .get("roll")
-        .or_else(|| col_map.get("rollnumber"))
-        .or_else(|| col_map.get("rollno"));
-    let email_col = col_map.get("email").or_else(|| col_map.get("emailid"));
-    let college_col = col_map
-        .get("college")
-        .or_else(|| col_map.get("collegename"));
+    let start_row_idx = if name_col.is_some() || roll_col.is_some() { 1 } else { 0 };
 
-    for (row_idx, row) in rows.iter().skip(1).enumerate() {
-        let get_string_val = |col: Option<&usize>, row: &[calamine::Data]| -> Option<String> {
-            col.and_then(|&i| {
-                row.get(i).and_then(|cell| match cell {
-                    calamine::Data::String(s) => Some(s.clone()),
-                    calamine::Data::Int(n) => Some(n.to_string()),
-                    calamine::Data::Float(f) => Some(f.to_string()),
-                    _ => None,
-                })
-            })
+    // 2. Fallback heuristic if headers were not explicitly matched:
+    if name_col.is_none() || roll_col.is_none() {
+        if let Some(sample_row) = raw_rows.get(start_row_idx) {
+            if sample_row.len() >= 2 {
+                let col0_val = &sample_row[0];
+                let col1_val = &sample_row[1];
+
+                let col0_has_digit = col0_val.chars().any(|c| c.is_ascii_digit());
+                let col1_has_digit = col1_val.chars().any(|c| c.is_ascii_digit());
+
+                if name_col.is_none() && roll_col.is_none() {
+                    if col0_has_digit && !col1_has_digit {
+                        roll_col = Some(0);
+                        name_col = Some(1);
+                    } else if !col0_has_digit && col1_has_digit {
+                        name_col = Some(0);
+                        roll_col = Some(1);
+                    } else {
+                        roll_col = Some(0);
+                        name_col = Some(1);
+                    }
+                } else if roll_col.is_none() {
+                    let taken = name_col.unwrap();
+                    roll_col = (0..sample_row.len()).find(|&i| i != taken);
+                } else if name_col.is_none() {
+                    let taken = roll_col.unwrap();
+                    name_col = (0..sample_row.len()).find(|&i| i != taken);
+                }
+            }
+        }
+    }
+
+    for (row_offset, row) in raw_rows.iter().skip(start_row_idx).enumerate() {
+        let get_val = |col: Option<usize>| -> Option<String> {
+            col.and_then(|i| row.get(i).map(|s| s.trim().to_string())).filter(|s| !s.is_empty())
         };
 
-        let name = get_string_val(name_col, row);
-        let roll_number = get_string_val(roll_col, row);
-        let email = get_string_val(email_col, row);
-        let college_name = get_string_val(college_col, row);
+        let name = get_val(name_col);
+        let roll_number = get_val(roll_col);
+        let email = get_val(email_col);
+        let college_name = get_val(college_col);
 
         match (&name, &roll_number) {
             (Some(n), Some(r)) if !n.trim().is_empty() && !r.trim().is_empty() => {
@@ -376,7 +484,7 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
                 if name.is_some() || roll_number.is_some() {
                     errors.push(format!(
                         "Row {}: Missing required fields (name/roll_number)",
-                        row_idx + 2
+                        row_offset + start_row_idx + 1
                     ));
                 }
             }
@@ -384,4 +492,53 @@ fn parse_excel(data: &[u8]) -> Result<(Vec<Student>, Vec<String>)> {
     }
 
     Ok((students, errors))
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_header() {
+        assert_eq!(normalize_header("Register No."), "registerno");
+        assert_eq!(normalize_header("Registration Number"), "registrationnumber");
+        assert_eq!(normalize_header("Roll No."), "rollno");
+        assert_eq!(normalize_header("Reg. No"), "regno");
+        assert_eq!(normalize_header("Student ID"), "studentid");
+        assert_eq!(normalize_header("Full Name"), "fullname");
+    }
+
+    #[test]
+    fn test_parse_csv_register_number_first() {
+        let csv_data = b"Register Number,Student Name,Email\n21B91A0501,Alice Smith,alice@example.com\n21B91A0502,Bob Jones,bob@example.com\n";
+        let (students, errors) = parse_excel(csv_data).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(students.len(), 2);
+        assert_eq!(students[0].roll_number, "21B91A0501");
+        assert_eq!(students[0].name, "Alice Smith");
+        assert_eq!(students[0].email.as_deref(), Some("alice@example.com"));
+        assert_eq!(students[1].roll_number, "21B91A0502");
+        assert_eq!(students[1].name, "Bob Jones");
+    }
+
+    #[test]
+    fn test_parse_csv_name_first_registration_second() {
+        let csv_data = b"Full Name,Registration No.,Department\nCharlie Brown,REG2024001,Computer Science\n";
+        let (students, errors) = parse_excel(csv_data).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(students.len(), 1);
+        assert_eq!(students[0].name, "Charlie Brown");
+        assert_eq!(students[0].roll_number, "REG2024001");
+        assert_eq!(students[0].college_name.as_deref(), Some("Computer Science"));
+    }
+
+    #[test]
+    fn test_parse_csv_fallback_without_headers() {
+        let csv_data = b"21B91A0505,David Miller\n21B91A0506,Eve Wilson\n";
+        let (students, errors) = parse_excel(csv_data).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(students.len(), 2);
+        assert_eq!(students[0].roll_number, "21B91A0505");
+        assert_eq!(students[0].name, "David Miller");
+    }
 }

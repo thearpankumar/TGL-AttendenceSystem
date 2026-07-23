@@ -15,6 +15,7 @@ pub struct Admin {
     pub role: String,
     #[serde(default)]
     pub failed_login_attempts: i32,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub lock_until: Option<DateTime<Utc>>,
     #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")]
     pub created_at: DateTime<Utc>,

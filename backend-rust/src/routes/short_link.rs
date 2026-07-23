@@ -28,7 +28,7 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/{shortCode}/submit",
-            post(crate::controllers::submit_shortlink_attendance),
+            post(crate::controllers::submit_attendance),
         )
         .route(
             "/{shortCode}/webauthn/status/{rollNumber}",

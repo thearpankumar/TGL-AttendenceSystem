@@ -51,7 +51,7 @@ mod tests {
             let mut results = Vec::new();
 
             for i in 0..6 {
-                let allowed = rate_limiter.login_rate_limit(test_ip).await;
+                let allowed = rate_limiter.login_rate_limit(test_ip, 5, 60).await;
                 results.push((i + 1, allowed));
             }
 
@@ -109,7 +109,7 @@ mod tests {
                 let ip = test_ip.to_string();
 
                 handles.push(tokio::spawn(
-                    async move { limiter.login_rate_limit(&ip).await },
+                    async move { limiter.login_rate_limit(&ip, 5, 60).await },
                 ));
             }
 
@@ -146,7 +146,7 @@ mod tests {
 
             // Make multiple requests - all should succeed
             for i in 0..10 {
-                let allowed = rate_limiter.login_rate_limit(test_ip).await;
+                let allowed = rate_limiter.login_rate_limit(test_ip, 5, 60).await;
                 assert!(
                     allowed,
                     "Request {} should be allowed with NODE_ENV=test",
@@ -219,11 +219,11 @@ mod tests {
 
             // IP 1: exhaust rate limit (5 requests max)
             for _ in 0..10 {
-                limiter.login_rate_limit("10.0.0.1").await;
+                limiter.login_rate_limit("10.0.0.1", 5, 60).await;
             }
 
             // IP 2: should still be allowed (independent counter)
-            let allowed = limiter.login_rate_limit("10.0.0.2").await;
+            let allowed = limiter.login_rate_limit("10.0.0.2", 5, 60).await;
             assert!(allowed, "Different IP should have independent rate limit");
 
             std::env::set_var("NODE_ENV", "test");
@@ -242,11 +242,11 @@ mod tests {
 
             // Exhaust login rate limit
             for _ in 0..10 {
-                limiter.login_rate_limit(ip).await;
+                limiter.login_rate_limit(ip, 10, 60).await;
             }
 
             // Admin rate limit should still work (independent type)
-            let allowed = limiter.admin_rate_limit(ip).await;
+            let allowed = limiter.admin_rate_limit(ip, 100, 60).await;
             assert!(
                 allowed,
                 "Different rate limit type should have independent counter"
@@ -268,7 +268,7 @@ mod tests {
 
             // First 5 requests should be allowed
             for i in 0..5 {
-                let allowed = limiter.login_rate_limit(ip).await;
+                let allowed = limiter.login_rate_limit(ip, 5, 60).await;
                 assert!(
                     allowed,
                     "Request {} should be allowed (within 5 request limit)",
@@ -277,7 +277,7 @@ mod tests {
             }
 
             // 6th request should be blocked
-            let blocked = limiter.login_rate_limit(ip).await;
+            let blocked = limiter.login_rate_limit(ip, 5, 60).await;
             assert!(!blocked, "6th request should be blocked");
 
             std::env::set_var("NODE_ENV", "test");
@@ -295,7 +295,7 @@ mod tests {
 
             // First 100 requests should be allowed
             for i in 0..100 {
-                let allowed = limiter.admin_rate_limit(ip).await;
+                let allowed = limiter.admin_rate_limit(ip, 100, 60).await;
                 assert!(
                     allowed,
                     "Admin request {} should be allowed (within 100 request limit)",
@@ -304,7 +304,7 @@ mod tests {
             }
 
             // 101st request should be blocked
-            let blocked = limiter.admin_rate_limit(ip).await;
+            let blocked = limiter.admin_rate_limit(ip, 100, 60).await;
             assert!(!blocked, "Admin request 101 should be blocked");
 
             std::env::set_var("NODE_ENV", "test");
@@ -322,7 +322,7 @@ mod tests {
 
             // First 20 requests should be allowed
             for i in 0..20 {
-                let allowed = limiter.student_rate_limit(ip).await;
+                let allowed = limiter.student_rate_limit(ip, 20, 60).await;
                 assert!(
                     allowed,
                     "Student request {} should be allowed (within 20 request limit)",
@@ -331,7 +331,7 @@ mod tests {
             }
 
             // 21st request should be blocked
-            let blocked = limiter.student_rate_limit(ip).await;
+            let blocked = limiter.student_rate_limit(ip, 20, 60).await;
             assert!(!blocked, "Student request 21 should be blocked");
 
             std::env::set_var("NODE_ENV", "test");
@@ -349,7 +349,7 @@ mod tests {
 
             // First 5 requests should be allowed
             for i in 0..5 {
-                let allowed = limiter.registration_rate_limit(ip).await;
+                let allowed = limiter.registration_rate_limit(ip, 5, 60).await;
                 assert!(
                     allowed,
                     "Registration request {} should be allowed (within 5 request limit)",
@@ -358,7 +358,7 @@ mod tests {
             }
 
             // 6th request should be blocked
-            let blocked = limiter.registration_rate_limit(ip).await;
+            let blocked = limiter.registration_rate_limit(ip, 5, 60).await;
             assert!(!blocked, "Registration request 6 should be blocked");
 
             std::env::set_var("NODE_ENV", "test");
@@ -376,7 +376,7 @@ mod tests {
 
             // First 10 requests should be allowed
             for i in 0..10 {
-                let allowed = limiter.client_log_rate_limit(ip).await;
+                let allowed = limiter.client_log_rate_limit(ip, 10, 60).await;
                 assert!(
                     allowed,
                     "Client log request {} should be allowed (within 10 request limit)",
@@ -385,7 +385,7 @@ mod tests {
             }
 
             // 11th request should be blocked
-            let blocked = limiter.client_log_rate_limit(ip).await;
+            let blocked = limiter.client_log_rate_limit(ip, 10, 60).await;
             assert!(!blocked, "Client log request 11 should be blocked");
 
             std::env::set_var("NODE_ENV", "test");

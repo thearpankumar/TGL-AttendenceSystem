@@ -17,7 +17,7 @@ pub struct Device {
     pub session_id: Option<ObjectId>,
     #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")]
     pub first_seen_at: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub last_seen_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub attendance_count: i32,
@@ -34,8 +34,8 @@ pub struct Device {
     #[serde(default)]
     pub is_blocked: bool,
     pub block_reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocked_at: Option<chrono::DateTime<Utc>>,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
+    pub blocked_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

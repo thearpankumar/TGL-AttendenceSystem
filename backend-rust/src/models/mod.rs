@@ -30,3 +30,32 @@ pub use webauthn_reenrollment_log::*;
 
 // Re-export Severity from constants for convenience
 pub use crate::constants::Severity;
+
+pub mod optional_chrono_bson {
+    use chrono::{DateTime, Utc};
+    use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        struct Helper<'a>(
+            #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")] &'a DateTime<Utc>,
+        );
+
+        date.as_ref().map(Helper).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper(
+            #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")] DateTime<Utc>,
+        );
+
+        Ok(Option::<Helper>::deserialize(deserializer)?.map(|h| h.0))
+    }
+}

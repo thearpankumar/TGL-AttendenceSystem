@@ -66,8 +66,8 @@ mod admin_lockout_tests {
         // - Returns AppError::Unauthorized("Invalid credentials")
 
         // Verify lockout constants
-        assert_eq!(attendance_geotag_backend::models::Admin::MAX_LOGIN_ATTEMPTS, 5);
-        assert_eq!(attendance_geotag_backend::models::Admin::LOCK_TIME_MINUTES, 15);
+        assert_eq!(attendance_geotag_backend::constants::MAX_LOGIN_ATTEMPTS, 5);
+        assert_eq!(attendance_geotag_backend::constants::LOCKOUT_DURATION_MINUTES as i64, 15);
 
         // Verify Admin.is_locked() behavior (models/admin.rs lines 109-114)
         let locked_admin = attendance_geotag_backend::models::Admin {
@@ -699,7 +699,7 @@ mod lockout_constants_tests {
     fn max_login_attempts_is_5() {
         // From models/admin.rs line 116
         assert_eq!(
-            attendance_geotag_backend::models::Admin::MAX_LOGIN_ATTEMPTS,
+            attendance_geotag_backend::constants::MAX_LOGIN_ATTEMPTS,
             5
         );
     }
@@ -709,7 +709,7 @@ mod lockout_constants_tests {
     fn lock_time_minutes_is_15() {
         // From models/admin.rs line 117
         assert_eq!(
-            attendance_geotag_backend::models::Admin::LOCK_TIME_MINUTES,
+            attendance_geotag_backend::constants::LOCKOUT_DURATION_MINUTES as i64,
             15
         );
     }
@@ -717,7 +717,7 @@ mod lockout_constants_tests {
     /// Test: Lock duration calculation
     #[test]
     fn lock_duration_calculation() {
-        let lock_time = Duration::minutes(attendance_geotag_backend::models::Admin::LOCK_TIME_MINUTES);
+        let lock_time = Duration::minutes(attendance_geotag_backend::constants::LOCKOUT_DURATION_MINUTES as i64);
         assert_eq!(lock_time.num_minutes(), 15);
         assert_eq!(lock_time.num_seconds(), 900);
     }

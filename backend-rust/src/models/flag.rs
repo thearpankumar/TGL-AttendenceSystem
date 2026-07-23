@@ -11,9 +11,11 @@ pub struct Flag {
     pub student_id: Option<ObjectId>,
     pub details: Option<String>,
     pub session_id: Option<ObjectId>,
+    #[serde(with = "bson::serde_helpers::datetime::FromChrono04DateTime")]
     pub timestamp: DateTime<Utc>,
     pub resolved: bool,
     pub resolved_by: Option<ObjectId>,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub resolved_at: Option<DateTime<Utc>>,
 }
 

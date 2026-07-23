@@ -150,9 +150,12 @@ pub async fn login(
     }
 
     if !admin.verify_password(&payload.password)? {
+        let sys_config = state.get_system_config().await;
+        let max_attempts = sys_config.lockout_config.max_login_attempts as i32;
+        let lock_duration = sys_config.lockout_config.lockout_duration_minutes as i64;
         let attempts = admin.failed_login_attempts + 1;
-        let lock_until = if attempts >= Admin::MAX_LOGIN_ATTEMPTS {
-            Some(chrono::Utc::now() + chrono::Duration::minutes(Admin::LOCK_TIME_MINUTES))
+        let lock_until = if attempts >= max_attempts {
+            Some(chrono::Utc::now() + chrono::Duration::minutes(lock_duration))
         } else {
             None
         };

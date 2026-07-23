@@ -17,7 +17,6 @@ use crate::{
         Attendance, Location, Session, ShortLink, WebAuthnChallenge, WebAuthnChallengeType,
         WebAuthnCredential,
     },
-    utils::calculate_distance,
     AppState,
 };
 
@@ -537,13 +536,17 @@ pub struct AuthenticationFinishRequest {
     pub roll_number: Option<String>,
     pub credential: AuthenticationCredentialResponse,
     pub student_name: Option<String>,
-    pub photo: Option<String>,
+    pub photo_url: Option<String>,
     pub photo_public_id: Option<String>,
     pub latitude: f64,
     pub longitude: f64,
     pub device_fingerprint: Option<String>,
     pub gps_data: Option<crate::middleware::GpsDataPayload>,
+    pub dev_bypass_camera: Option<bool>,
+    pub dev_bypass_gps: Option<bool>,
+    pub dev_bypass_webauthn: Option<bool>,
 }
+
 
 #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -586,6 +589,9 @@ pub struct AttendanceSummary {
 pub async fn finish_authentication(
     State(state): State<Arc<AppState>>,
     Path(short_code): Path<String>,
+    axum::Extension(gps_validation): axum::Extension<crate::middleware::GpsValidationResult>,
+    axum::Extension(emulator_detection): axum::Extension<crate::middleware::EmulatorDetectionResult>,
+    axum::Extension(device_integrity): axum::Extension<crate::middleware::DeviceIntegrityResult>,
     Json(payload): Json<AuthenticationFinishRequest>,
 ) -> Result<impl IntoResponse> {
     let db = state.database();
@@ -598,6 +604,10 @@ pub async fn finish_authentication(
     let challenges: Collection<WebAuthnChallenge> =
         db.collection(WebAuthnChallenge::collection_name());
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
+    let system_configs: Collection<crate::models::SystemConfig> = db.collection(crate::models::SystemConfig::collection_name());
+
+    let sys_config = system_configs.find_one(doc! {}).await?.unwrap_or_default();
+    let is_dev_bypass_all = sys_config.dev_bypass_enabled || std::env::var("DEV_BYPASS_ALL").unwrap_or_default() == "true";
 
     // Find short link
     let short_link = short_links
@@ -718,19 +728,51 @@ pub async fn finish_authentication(
         .ok_or_else(|| AppError::NotFound("Location not found".to_string()))?;
 
     // Calculate distance
-    let distance = calculate_distance(
+    let distance = crate::utils::calculate_distance(
         location.latitude,
         location.longitude,
         payload.latitude,
         payload.longitude,
     );
 
-    if distance > location.radius_meters {
+    if distance > location.radius_meters && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false)) {
         return Err(AppError::BadRequest(format!(
             "You are {}m away from the location (max: {}m)",
             distance, location.radius_meters
         )));
     }
+
+    let has_high_severity_gps = gps_validation
+        .anomalies
+        .iter()
+        .any(|a| a.severity == crate::Severity::High) && !(is_dev_bypass_all && payload.dev_bypass_gps.unwrap_or(false));
+    
+    let has_security_flags = has_high_severity_gps
+        || ((emulator_detection.has_high_severity || emulator_detection.detected) && !(is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false)));
+
+    let should_flag = has_security_flags || !device_integrity.passed;
+    
+    let (device_flag, flag_reason) = if has_high_severity_gps {
+        (Some(crate::models::AttendanceDeviceFlag::GpsAnomalyDetected), Some("GPS anomalies detected".to_string()))
+    } else if emulator_detection.detected {
+        (Some(crate::models::AttendanceDeviceFlag::EmulatorDetected), Some("Emulator detected".to_string()))
+    } else if !device_integrity.passed {
+        (Some(crate::models::AttendanceDeviceFlag::IntegrityCheckFailed), Some("Integrity checks failed".to_string()))
+    } else {
+        (None, None)
+    };
+
+    let face_detected_result = if is_dev_bypass_all && payload.dev_bypass_camera.unwrap_or(false) {
+        Some(true)
+    } else if let (Some(photo_public_id), true) = (&payload.photo_public_id, payload.photo_url.is_some()) {
+        match state.storage.provider().download(photo_public_id).await {
+            Ok(image_data) => match crate::services::face_detection::detect_faces(&image_data).await {
+                Ok(result) => Some(result.face_detected),
+                Err(_) => None,
+            },
+            Err(_) => None,
+        }
+    } else { None };
 
     // Create attendance record
     let student_name = payload
@@ -749,7 +791,7 @@ pub async fn finish_authentication(
         session_id,
         student_name: student_name.clone(),
         roll_number: roll_upper.clone(),
-        photo_url: payload.photo.clone().unwrap_or_default(),
+        photo_url: payload.photo_url.clone().unwrap_or_default(),
         photo_public_id: payload.photo_public_id.clone().unwrap_or_default(),
         photo_hash: None,
         photo_reuse_detected: false,
@@ -761,36 +803,25 @@ pub async fn finish_authentication(
         network_provider: None,
         network_org: None,
         verified: true,
-        face_detected: true,
+        face_detected: face_detected_result.unwrap_or(true),
         device_fingerprint: payload.device_fingerprint.clone(),
         device_fingerprint_hash,
         device_first_seen: false,
         totp_code: None,
         totp_valid: None,
-        device_flag: None,
-        webauthn_credential_id: Some(payload.credential.id.clone()),
+        device_flag,
+        webauthn_credential_id: stored_credential.id.map(|id| id.to_hex()),
         webauthn_verified: true,
-        webauthn_device_type: payload
-            .credential
-            .authenticator_attachment
-            .as_ref()
-            .map(|_| crate::models::WebAuthnDeviceType::Unknown),
-        webauthn_authenticator_attachment: payload
-            .credential
-            .authenticator_attachment
-            .as_ref()
-            .map(|a| match a.as_str() {
-                "platform" => crate::models::WebAuthnAttachment::Platform,
-                _ => crate::models::WebAuthnAttachment::CrossPlatform,
-            }),
+        webauthn_device_type: Some(crate::models::WebAuthnDeviceType::Unknown),
+        webauthn_authenticator_attachment: Some(crate::models::WebAuthnAttachment::CrossPlatform),
         webauthn_counter: Some(counter as i32),
         webauthn_replay_attack: replay_attack,
         flag_reviewed: false,
         flag_reviewed_by: None,
         flag_reviewed_at: None,
-        flagged: false,
-        flag_reason: None,
-        flag_details: None,
+        flagged: should_flag,
+        flag_reason: if is_dev_bypass_all && (payload.dev_bypass_camera.unwrap_or(false) || payload.dev_bypass_gps.unwrap_or(false) || payload.dev_bypass_webauthn.unwrap_or(false)) { Some(format!("Dev bypass used: Camera: {}, GPS: {}, Webauthn: {}", payload.dev_bypass_camera.unwrap_or(false), payload.dev_bypass_gps.unwrap_or(false), payload.dev_bypass_webauthn.unwrap_or(false))) } else { flag_reason.clone() },
+        flag_details: flag_reason,
         captured_at: Utc::now(),
         gps_accuracy: payload.gps_data.as_ref().and_then(|g| g.accuracy),
         gps_altitude: payload.gps_data.as_ref().and_then(|g| g.altitude),
@@ -806,7 +837,7 @@ pub async fn finish_authentication(
         gps_provider: payload.gps_data.as_ref().and_then(|g| g.provider.clone()),
         gps_anomalies: vec![],
         gps_confidence: None,
-        emulator_detected: false,
+        emulator_detected: emulator_detection.detected,
         emulator_flags: vec![],
         integrity_checks: vec![],
     };
@@ -938,172 +969,7 @@ pub async fn get_captcha(
     }))
 }
 
-// =================== Submit Attendance ===================
-
-#[derive(Debug, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-pub struct SubmitAttendanceRequest {
-    pub roll_number: String,
-    pub student_name: String,
-    pub photo: String,
-    pub photo_public_id: Option<String>,
-    pub latitude: f64,
-    pub longitude: f64,
-    pub device_fingerprint: Option<String>,
-    pub totp_code: Option<String>,
-    pub captcha_answer: String,
-    pub captcha_id: String,
-    pub gps_data: Option<crate::middleware::GpsDataPayload>,
-}
-
-pub async fn submit_attendance(
-    State(state): State<Arc<AppState>>,
-    Path(short_code): Path<String>,
-    Json(payload): Json<SubmitAttendanceRequest>,
-) -> Result<impl IntoResponse> {
-    let db = state.database();
-
-    let short_links: Collection<ShortLink> = db.collection(ShortLink::collection_name());
-    let sessions: Collection<Session> = db.collection(Session::collection_name());
-    let locations: Collection<Location> = db.collection(Location::collection_name());
-    let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
-
-    let short_link = short_links
-        .find_one(doc! { "shortCode": short_code.to_lowercase(), "isActive": true })
-        .await?
-        .ok_or_else(|| AppError::NotFound("Invalid session".to_string()))?;
-
-    let session_id = short_link
-        .session_id
-        .ok_or_else(|| AppError::NotFound("No session associated with this link".to_string()))?;
-
-    let session = sessions
-        .find_one(doc! { "_id": session_id })
-        .await?
-        .ok_or_else(|| AppError::NotFound("Session not found".to_string()))?;
-
-    if !session.is_active || session.is_expired() {
-        return Err(AppError::BadRequest("Session expired".to_string()));
-    }
-
-    // Verify captcha
-    verify_captcha(&payload.captcha_id, &payload.captcha_answer)?;
-
-    let roll_upper = payload.roll_number.to_uppercase();
-
-    // Check for existing attendance
-    let existing = attendances
-        .find_one(doc! { "sessionId": session_id, "rollNumber": &roll_upper })
-        .await?;
-
-    if existing.is_some() {
-        return Err(AppError::BadRequest(
-            "Attendance already submitted".to_string(),
-        ));
-    }
-
-    // Get location
-    let location = locations
-        .find_one(doc! { "_id": session.location_id })
-        .await?
-        .ok_or_else(|| AppError::NotFound("Location not found".to_string()))?;
-
-    // Calculate distance
-    let distance = calculate_distance(
-        location.latitude,
-        location.longitude,
-        payload.latitude,
-        payload.longitude,
-    );
-
-    if distance > location.radius_meters {
-        return Err(AppError::BadRequest(format!(
-            "You are {}m away from the location (max: {}m)",
-            distance, location.radius_meters
-        )));
-    }
-
-    let device_fingerprint_hash = payload
-        .device_fingerprint
-        .as_ref()
-        .map(|fp| crate::models::Device::hash_fingerprint(fp));
-
-    let attendance = Attendance {
-        id: None,
-        session_id,
-        student_name: payload.student_name.clone(),
-        roll_number: roll_upper.clone(),
-        photo_url: payload.photo.clone(),
-        photo_public_id: payload.photo_public_id.clone().unwrap_or_default(),
-        photo_hash: None,
-        photo_reuse_detected: false,
-        student_latitude: payload.latitude,
-        student_longitude: payload.longitude,
-        distance_from_location: distance,
-        ip_address: None,
-        user_agent: None,
-        network_provider: None,
-        network_org: None,
-        verified: true,
-        face_detected: true,
-        device_fingerprint: payload.device_fingerprint.clone(),
-        device_fingerprint_hash,
-        device_first_seen: false,
-        totp_code: payload.totp_code.clone(),
-        totp_valid: None,
-        device_flag: None,
-        webauthn_credential_id: None,
-        webauthn_verified: false,
-        webauthn_device_type: None,
-        webauthn_authenticator_attachment: None,
-        webauthn_counter: None,
-        webauthn_replay_attack: false,
-        flag_reviewed: false,
-        flag_reviewed_by: None,
-        flag_reviewed_at: None,
-        flagged: false,
-        flag_reason: None,
-        flag_details: None,
-        captured_at: Utc::now(),
-        gps_accuracy: payload.gps_data.as_ref().and_then(|g| g.accuracy),
-        gps_altitude: payload.gps_data.as_ref().and_then(|g| g.altitude),
-        gps_altitude_accuracy: None,
-        gps_speed: payload.gps_data.as_ref().and_then(|g| g.speed),
-        gps_heading: None,
-        gps_timestamp: payload.gps_data.as_ref().and_then(|g| g.timestamp),
-        gps_mock_location: payload
-            .gps_data
-            .as_ref()
-            .and_then(|g| g.mock_location)
-            .unwrap_or(false),
-        gps_provider: payload.gps_data.as_ref().and_then(|g| g.provider.clone()),
-        gps_anomalies: vec![],
-        gps_confidence: None,
-        emulator_detected: false,
-        emulator_flags: vec![],
-        integrity_checks: vec![],
-    };
-
-    let result = attendances.insert_one(&attendance).await?;
-    let attendance_id = result
-        .inserted_id
-        .as_object_id()
-        .ok_or_else(|| AppError::Internal("Failed to get inserted ID".to_string()))?;
-
-    Ok(Json(serde_json::json!({
-        "message": "Attendance submitted successfully",
-        "attendance": {
-            "id": attendance_id.to_hex(),
-            "studentName": payload.student_name,
-            "rollNumber": roll_upper,
-            "distanceFromLocation": distance,
-            "verified": true,
-            "capturedAt": Utc::now().to_rfc3339(),
-            "webauthnVerified": false
-        }
-    })))
-}
-
+// Removed unused submit_attendance
 // =================== Helper Functions ===================
 
 fn generate_challenge() -> String {
@@ -1147,30 +1013,7 @@ fn sign_captcha(text: &str, timestamp: i64) -> String {
     hex::encode(hasher.finalize())
 }
 
-fn verify_captcha(captcha_id: &str, answer: &str) -> Result<()> {
-    let parts: Vec<&str> = captcha_id.split('.').collect();
-    if parts.len() != 2 {
-        return Err(AppError::BadRequest("Invalid captcha ID".to_string()));
-    }
 
-    let timestamp: i64 = parts[0]
-        .parse()
-        .map_err(|_| AppError::BadRequest("Invalid captcha timestamp".to_string()))?;
-
-    // Check expiry (5 minutes)
-    let now = chrono::Utc::now().timestamp_millis();
-    if now - timestamp > 5 * 60 * 1000 {
-        return Err(AppError::BadRequest("Captcha expired".to_string()));
-    }
-
-    // Verify signature
-    let expected = sign_captcha(answer, timestamp);
-    if parts[1] != expected {
-        return Err(AppError::BadRequest("Incorrect captcha".to_string()));
-    }
-
-    Ok(())
-}
 
 fn extract_public_key_from_attestation(attestation_object: &str, _rp_id: &str) -> Result<Vec<u8>> {
     let decoded = base64::Engine::decode(

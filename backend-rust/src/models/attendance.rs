@@ -45,6 +45,7 @@ pub struct Attendance {
     #[serde(default)]
     pub flag_reviewed: bool,
     pub flag_reviewed_by: Option<ObjectId>,
+    #[serde(default, with = "crate::models::optional_chrono_bson")]
     pub flag_reviewed_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub flagged: bool,

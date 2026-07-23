@@ -30,6 +30,9 @@ pub struct CreateSessionRequest {
     pub description: Option<String>,
     #[serde(alias = "durationMinutes", alias = "expiresInHours")]
     pub duration_minutes: Option<i32>,
+    pub shortlink_mode: Option<String>,
+    pub custom_short_code: Option<String>,
+    pub existing_short_code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,6 +59,8 @@ pub struct SessionResponse {
     pub created_at: Option<DateTime<Utc>>,
     #[serde(rename = "attendanceCount")]
     pub attendance_count: Option<i64>,
+    #[serde(rename = "shortCode")]
+    pub short_code: Option<String>,
 }
 
 pub async fn create_session(
@@ -71,17 +76,70 @@ pub async fn create_session(
     };
     validate_request(&validation_req)?;
 
-    let collection: Collection<Session> = state
-        .db
-        .database(
-            state
-                .config
-                .mongodb_uri
-                .split('/')
-                .next_back()
-                .unwrap_or("default").split('?').next().unwrap_or("default"),
-        )
-        .collection(Session::collection_name());
+    let db_name = state
+        .config
+        .mongodb_uri
+        .split('/')
+        .next_back()
+        .unwrap_or("default").split('?').next().unwrap_or("default");
+
+    let db = state.db.database(db_name);
+    let collection: Collection<Session> = db.collection(Session::collection_name());
+    let shortlink_collection: Collection<ShortLink> = db.collection(ShortLink::collection_name());
+
+    let mode = payload.shortlink_mode.as_deref().unwrap_or("auto");
+
+    // Pre-validate short link requirements before creating session
+    let custom_code_to_use = if mode == "custom" {
+        let code = payload
+            .custom_short_code
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .to_lowercase();
+        if code.len() < 3 || code.len() > 20 || !code.chars().all(|c| c.is_alphanumeric() || c == '-') {
+            return Err(AppError::BadRequest(
+                "Custom short code must be 3-20 alphanumeric characters or hyphens".to_string(),
+            ));
+        }
+        let existing = shortlink_collection
+            .find_one(doc! { "shortCode": &code })
+            .await?;
+        if existing.is_some() {
+            return Err(AppError::BadRequest(format!(
+                "Short link '/s/{}' is already taken. Please choose another custom code.",
+                code
+            )));
+        }
+        Some(code)
+    } else {
+        None
+    };
+
+    let existing_code_to_use = if mode == "existing" {
+        let code = payload
+            .existing_short_code
+            .as_deref()
+            .unwrap_or("")
+            .trim();
+        if code.is_empty() {
+            return Err(AppError::BadRequest(
+                "Please select an existing short link".to_string(),
+            ));
+        }
+        let existing = shortlink_collection
+            .find_one(doc! { "shortCode": code })
+            .await?;
+        if existing.is_none() {
+            return Err(AppError::NotFound(format!(
+                "Existing short link '/s/{}' not found",
+                code
+            )));
+        }
+        Some(code.to_string())
+    } else {
+        None
+    };
 
     let location_id = ObjectId::parse_str(&payload.location_id)
         .map_err(|e| AppError::BadRequest(format!("Invalid location ID: {}", e)))?;
@@ -115,6 +173,82 @@ pub async fn create_session(
         .as_object_id()
         .ok_or_else(|| AppError::Internal("Failed to get inserted ID".to_string()))?;
 
+    // Atomically create or assign short link
+    let created_short_code = match mode {
+        "custom" => {
+            let code = custom_code_to_use.unwrap();
+            let short_link = ShortLink {
+                id: None,
+                short_code: code.clone(),
+                session_id: Some(session_id),
+                created_by: auth.id,
+                is_active: true,
+                expires_at: Some(session.expires_at),
+                click_count: 0,
+                last_clicked_at: None,
+                created_at: Utc::now(),
+            };
+            if let Err(e) = shortlink_collection.insert_one(&short_link).await {
+                let _ = collection.delete_one(doc! { "_id": session_id }).await;
+                return Err(AppError::Internal(format!("Failed to create short link: {}", e)));
+            }
+            code
+        }
+        "existing" => {
+            let code = existing_code_to_use.unwrap();
+            let update_res = shortlink_collection
+                .update_one(
+                    doc! { "shortCode": &code },
+                    doc! {
+                        "$set": {
+                            "sessionId": session_id,
+                            "isActive": true,
+                            "expiresAt": mongodb::bson::DateTime::from_millis(session.expires_at.timestamp_millis()),
+                        }
+                    },
+                )
+                .await;
+            if let Err(e) = update_res {
+                let _ = collection.delete_one(doc! { "_id": session_id }).await;
+                return Err(AppError::Internal(format!("Failed to attach short link: {}", e)));
+            }
+            code
+        }
+        _ => {
+            let mut attempts = 0;
+            let code = loop {
+                let candidate = ShortLink::generate_short_code(6);
+                let existing = shortlink_collection
+                    .find_one(doc! { "shortCode": &candidate })
+                    .await?;
+                if existing.is_none() {
+                    break candidate;
+                }
+                attempts += 1;
+                if attempts > 10 {
+                    let _ = collection.delete_one(doc! { "_id": session_id }).await;
+                    return Err(AppError::Internal("Failed to generate unique short code".to_string()));
+                }
+            };
+            let short_link = ShortLink {
+                id: None,
+                short_code: code.clone(),
+                session_id: Some(session_id),
+                created_by: auth.id,
+                is_active: true,
+                expires_at: Some(session.expires_at),
+                click_count: 0,
+                last_clicked_at: None,
+                created_at: Utc::now(),
+            };
+            if let Err(e) = shortlink_collection.insert_one(&short_link).await {
+                let _ = collection.delete_one(doc! { "_id": session_id }).await;
+                return Err(AppError::Internal(format!("Failed to create short link: {}", e)));
+            }
+            code
+        }
+    };
+
     let location = state
         .database()
         .collection(Location::collection_name())
@@ -136,14 +270,23 @@ pub async fn create_session(
             token_prefix: Some(session.token_prefix),
             created_at: Some(session.created_at),
             attendance_count: Some(0),
+            short_code: Some(created_short_code),
         }),
     ))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSessionsQuery {
+    #[serde(alias = "location_id")]
+    pub location_id: Option<String>,
+    pub date: Option<String>,
 }
 
 pub async fn get_sessions(
     State(state): State<Arc<crate::AppState>>,
     Extension(_auth): Extension<AuthenticatedAdmin>,
-    Query(_query): Query<serde_json::Value>,
+    Query(query): Query<GetSessionsQuery>,
 ) -> Result<impl IntoResponse> {
     let db = state.database();
     let sessions: Collection<Session> = db.collection(Session::collection_name());
@@ -151,8 +294,38 @@ pub async fn get_sessions(
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
     let batches: Collection<Batch> = db.collection(Batch::collection_name());
 
+    let mut filter_doc = doc! {};
+
+    if let Some(ref loc_id_str) = query.location_id {
+        let trimmed = loc_id_str.trim();
+        if !trimmed.is_empty() {
+            if let Ok(loc_oid) = ObjectId::parse_str(trimmed) {
+                filter_doc.insert("locationId", loc_oid);
+            }
+        }
+    }
+
+    if let Some(ref date_str) = query.date {
+        let trimmed = date_str.trim();
+        if !trimmed.is_empty() {
+            if let Ok(naive_date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+                if let Some(start_of_day) = naive_date.and_hms_opt(0, 0, 0) {
+                    if let Some(end_of_day) = naive_date.and_hms_opt(23, 59, 59) {
+                        let start_utc = DateTime::<Utc>::from_naive_utc_and_offset(start_of_day, Utc);
+                        let end_utc = DateTime::<Utc>::from_naive_utc_and_offset(end_of_day, Utc);
+                        filter_doc.insert("createdAt", doc! {
+                            "$gte": mongodb::bson::DateTime::from_millis(start_utc.timestamp_millis()),
+                            "$lte": mongodb::bson::DateTime::from_millis(end_utc.timestamp_millis()),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let shortlinks: Collection<ShortLink> = db.collection(ShortLink::collection_name());
     let mut cursor = sessions
-        .find(doc! {})
+        .find(filter_doc)
         .sort(doc! { "createdAt": -1 })
         .limit(DASHBOARD_PAGE_SIZE)
         .await?;
@@ -175,6 +348,12 @@ pub async fn get_sessions(
             .count_documents(doc! { "sessionId": session.id })
             .await?;
 
+        let short_link = if let Some(sid) = session.id {
+            shortlinks.find_one(doc! { "sessionId": sid, "isActive": true }).await?
+        } else {
+            None
+        };
+
         sessions_list.push(SessionResponse {
             id: session
                 .id
@@ -191,6 +370,7 @@ pub async fn get_sessions(
             token_prefix: Some(session.token_prefix),
             created_at: Some(session.created_at),
             attendance_count: Some(attendance_count as i64),
+            short_code: short_link.map(|s| s.short_code),
         });
     }
 
@@ -207,6 +387,7 @@ pub async fn get_session(
     let locations: Collection<Location> = db.collection(Location::collection_name());
     let batches: Collection<Batch> = db.collection(Batch::collection_name());
     let attendances: Collection<Attendance> = db.collection(Attendance::collection_name());
+    let shortlinks: Collection<ShortLink> = db.collection(ShortLink::collection_name());
 
     let session_id = ObjectId::parse_str(&id)
         .map_err(|e| AppError::BadRequest(format!("Invalid session ID: {}", e)))?;
@@ -230,6 +411,10 @@ pub async fn get_session(
         .count_documents(doc! { "sessionId": session.id })
         .await?;
 
+    let short_link = shortlinks
+        .find_one(doc! { "sessionId": session.id, "isActive": true })
+        .await?;
+
     Ok(Json(SessionResponse {
         id: session
             .id
@@ -246,6 +431,7 @@ pub async fn get_session(
         token_prefix: Some(session.token_prefix),
         created_at: Some(session.created_at),
         attendance_count: Some(attendance_count as i64),
+        short_code: short_link.map(|s| s.short_code),
     }))
 }
 

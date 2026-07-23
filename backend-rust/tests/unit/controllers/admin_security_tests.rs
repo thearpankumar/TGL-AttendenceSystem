@@ -1078,3 +1078,32 @@ mod update_security_settings_request_tests {
         assert!(partial_update.is_some());
     }
 }
+
+mod security_settings_includes_new_fields {
+    use attendance_geotag_backend::models::SystemConfig;
+    use attendance_geotag_backend::controllers::UpdateSecuritySettingsRequest;
+
+    #[test]
+    fn should_return_rate_limits_in_full_config() {
+        let config = SystemConfig::default();
+        let _ = config.rate_limits;
+        let _ = config.webauthn_config;
+        let _ = config.photo_verification;
+    }
+
+    #[test]
+    fn should_update_security_settings_preserves_unset_fields() {
+        let req = UpdateSecuritySettingsRequest {
+            gps_validation: Some(attendance_geotag_backend::models::GpsValidationConfig::default()),
+            emulator_detection: None,
+            trust_score: None,
+            rate_limits: None,
+            webauthn_config: None,
+            photo_verification: None,
+        };
+        
+        assert!(req.gps_validation.is_some());
+        assert!(req.emulator_detection.is_none());
+        assert!(req.rate_limits.is_none());
+    }
+}

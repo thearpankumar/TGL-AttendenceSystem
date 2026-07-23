@@ -8,26 +8,6 @@ use tokio::sync::RwLock;
 
 const RATE_LIMIT_PREFIX: &str = "rl:";
 
-// Rate limit constants for admin endpoints
-const RATE_LIMIT_ADMIN_WINDOW_SECS: u64 = 900;
-const RATE_LIMIT_ADMIN_MAX: u32 = 100;
-
-// Rate limit constants for student endpoints
-const RATE_LIMIT_STUDENT_WINDOW_SECS: u64 = 60;
-const RATE_LIMIT_STUDENT_MAX: u32 = 20;
-
-// Rate limit constants for login endpoint
-const RATE_LIMIT_LOGIN_WINDOW_SECS: u64 = 900;
-const RATE_LIMIT_LOGIN_MAX: u32 = 5;
-
-// Rate limit constants for registration endpoint
-const RATE_LIMIT_REGISTRATION_WINDOW_SECS: u64 = 900;
-const RATE_LIMIT_REGISTRATION_MAX: u32 = 5;
-
-// Rate limit constants for client log endpoint
-const RATE_LIMIT_CLIENTLOG_WINDOW_SECS: u64 = 60;
-const RATE_LIMIT_CLIENTLOG_MAX: u32 = 10;
-
 #[derive(Clone)]
 pub struct RateLimitConfig {
     pub window_secs: u64,
@@ -37,8 +17,8 @@ pub struct RateLimitConfig {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
-            window_secs: RATE_LIMIT_ADMIN_WINDOW_SECS,
-            max_requests: RATE_LIMIT_ADMIN_MAX,
+            window_secs: 60,
+            max_requests: 1000,
         }
     }
 }
@@ -56,7 +36,6 @@ impl RateLimitConfig {
 pub struct RateLimiter {
     redis: Option<Arc<redis::Client>>,
     memory_store: Arc<RwLock<HashMap<String, RateEntry>>>,
-    configs: HashMap<String, RateLimitConfig>,
     use_redis: bool,
 }
 
@@ -72,60 +51,32 @@ impl RateLimiter {
     }
 
     pub fn with_redis(redis: Option<Arc<redis::Client>>) -> Self {
-        let mut configs = HashMap::new();
-        configs.insert(
-            "admin".to_string(),
-            RateLimitConfig::new(RATE_LIMIT_ADMIN_WINDOW_SECS, RATE_LIMIT_ADMIN_MAX),
-        );
-        configs.insert(
-            "student".to_string(),
-            RateLimitConfig::new(RATE_LIMIT_STUDENT_WINDOW_SECS, RATE_LIMIT_STUDENT_MAX),
-        );
-        configs.insert(
-            "login".to_string(),
-            RateLimitConfig::new(RATE_LIMIT_LOGIN_WINDOW_SECS, RATE_LIMIT_LOGIN_MAX),
-        );
-        configs.insert(
-            "registration".to_string(),
-            RateLimitConfig::new(
-                RATE_LIMIT_REGISTRATION_WINDOW_SECS,
-                RATE_LIMIT_REGISTRATION_MAX,
-            ),
-        );
-        configs.insert(
-            "clientlog".to_string(),
-            RateLimitConfig::new(RATE_LIMIT_CLIENTLOG_WINDOW_SECS, RATE_LIMIT_CLIENTLOG_MAX),
-        );
-
         Self {
             use_redis: redis.is_some(),
             redis,
             memory_store: Arc::new(RwLock::new(HashMap::new())),
-            configs,
         }
     }
 
-    pub async fn check_rate_limit(&self, key: &str, limit_type: &str) -> bool {
+    pub async fn check_rate_limit(&self, key: &str, config: &RateLimitConfig) -> bool {
         // Skip rate limiting in test environment
         if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
             return true;
         }
 
-        let config = self.configs.get(limit_type).cloned().unwrap_or_default();
-
         if self.use_redis {
-            match self.check_with_redis(key, &config).await {
+            match self.check_with_redis(key, config).await {
                 Ok(result) => result,
                 Err(e) => {
                     tracing::warn!(
                         "Redis rate limit check failed: {}, falling back to memory",
                         e
                     );
-                    self.check_with_config(key, &config).await
+                    self.check_with_config(key, config).await
                 }
             }
         } else {
-            self.check_with_config(key, &config).await
+            self.check_with_config(key, config).await
         }
     }
 
@@ -179,29 +130,29 @@ impl RateLimiter {
         entry.count <= config.max_requests
     }
 
-    pub async fn student_rate_limit(&self, ip: &str) -> bool {
+    pub async fn student_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("student:{}", ip);
-        self.check_rate_limit(&key, "student").await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
     }
 
-    pub async fn admin_rate_limit(&self, ip: &str) -> bool {
+    pub async fn admin_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("admin:{}", ip);
-        self.check_rate_limit(&key, "admin").await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
     }
 
-    pub async fn login_rate_limit(&self, ip: &str) -> bool {
+    pub async fn login_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("login:{}", ip);
-        self.check_rate_limit(&key, "login").await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
     }
 
-    pub async fn registration_rate_limit(&self, ip: &str) -> bool {
+    pub async fn registration_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("registration:{}", ip);
-        self.check_rate_limit(&key, "registration").await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
     }
 
-    pub async fn client_log_rate_limit(&self, ip: &str) -> bool {
+    pub async fn client_log_rate_limit(&self, ip: &str, max_requests: u32, window_secs: u64) -> bool {
         let key = format!("clientlog:{}", ip);
-        self.check_rate_limit(&key, "clientlog").await
+        self.check_rate_limit(&key, &RateLimitConfig::new(window_secs, max_requests)).await
     }
 
     pub fn is_redis_enabled(&self) -> bool {

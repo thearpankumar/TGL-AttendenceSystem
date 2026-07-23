@@ -10,10 +10,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use attendance_geotag_backend::{
     config::AppConfig,
     middleware::{RateLimiter, SessionCache},
+    models::SystemConfig,
     services::GpsHistoryService,
     storage::Storage,
     AppState,
 };
+use mongodb::{bson::doc, Collection};
+use tokio::sync::RwLock;
 
 fn init_tracing() {
     let is_dev = std::env::var("NODE_ENV").unwrap_or_default() == "development"
@@ -114,6 +117,28 @@ async fn main() -> anyhow::Result<()> {
         .user_agent("Attendance-GEOTAG-Backend/1.0")
         .build()?;
 
+    // Load system config from DB on startup for hot-reload cache
+    let system_config_startup = {
+        let db_name_str = db_name.as_str();
+        let col: Collection<SystemConfig> = db
+            .database(db_name_str)
+            .collection(SystemConfig::collection_name());
+        match col.find_one(doc! {}).await {
+            Ok(Some(cfg)) => {
+                tracing::info!("System config loaded from DB");
+                cfg
+            }
+            Ok(None) => {
+                tracing::info!("No system config in DB, using defaults");
+                SystemConfig::default()
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load system config from DB: {}. Using defaults.", e);
+                SystemConfig::default()
+            }
+        }
+    };
+
     if redis_client.is_some() {
         tracing::info!("Redis-backed services enabled:");
         tracing::info!("  - Session caching: {}", session_cache.is_redis_enabled());
@@ -132,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
         start_time: std::time::Instant::now(),
         storage,
         http_client,
+        system_config: Arc::new(RwLock::new(system_config_startup)),
     });
 
     create_indexes(&state).await?;
@@ -262,18 +288,7 @@ async fn create_indexes(state: &Arc<AppState>) -> anyhow::Result<()> {
     let sessions: mongodb::Collection<attendance_geotag_backend::models::Session> =
         db.collection("sessions");
 
-    sessions
-        .create_index(
-            IndexModel::builder()
-                .keys(doc! { "token": 1 })
-                .options(
-                    mongodb::options::IndexOptions::builder()
-                        .unique(true)
-                        .build(),
-                )
-                .build(),
-        )
-        .await?;
+
 
     sessions
         .create_index(
