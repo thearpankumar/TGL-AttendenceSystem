@@ -22,13 +22,20 @@ interface Batch { _id: string; name: string; studentCount: number; }
 type ShortlinkMode = 'auto' | 'custom' | 'existing';
 interface Session {
   _id: string;
-  locationId?: Location;
+  locationId?: Location | string;
+  locationName?: string;
   isActive: boolean;
   expiresAt: string;
   createdAt: string;
   attendanceCount: number;
   description?: string;
 }
+
+const getLocationName = (s: Session) => {
+  if (s.locationName) return s.locationName;
+  if (typeof s.locationId === 'object' && s.locationId?.name) return s.locationId.name;
+  return 'Unknown';
+};
 
 const getInitialFilters = () => {
   try {
@@ -117,22 +124,7 @@ const Sessions = () => {
         return;
       }
 
-      // Pre-flight check for custom short link
-      if (formData.shortlinkMode === 'custom' && formData.customShortCode.trim()) {
-        try {
-          await axios.get(`/api/admin/shortlinks/${formData.customShortCode.trim()}`);
-          toast.error(`Short link '/s/${formData.customShortCode.trim()}' already exists. Please choose another one.`);
-          return;
-        } catch (error) {
-          const err = error as { response?: { status?: number } };
-          if (err.response && err.response.status !== 404) {
-            toast.error(`Short link '/s/${formData.customShortCode.trim()}' is unavailable.`);
-            return;
-          }
-        }
-      }
-
-      // Pre-flight check for reassigning existing short link
+      // Check for reassigning existing short link confirmation
       if (formData.shortlinkMode === 'existing' && formData.existingShortCode && !forceReassign) {
         const selectedLink = activeShortLinks.find(l => l.shortCode === formData.existingShortCode);
         if (selectedLink && selectedLink.sessionId) {
@@ -141,32 +133,23 @@ const Sessions = () => {
         }
       }
 
-      const res = await axios.post<{ _id: string }>('/api/admin/sessions', {
+      const res = await axios.post<{ _id: string; shortCode?: string }>('/api/admin/sessions', {
         locationId: formData.locationId,
         durationMinutes: duration,
         description: formData.description,
         batchId: formData.batchId || null,
+        shortlinkMode: formData.shortlinkMode,
+        customShortCode: formData.customShortCode.trim() || undefined,
+        existingShortCode: formData.existingShortCode || undefined,
       });
 
-      const sessionId = res.data._id;
       const { protocol, hostname } = window.location;
       let successMessage = 'Session created successfully!';
 
-      if (formData.shortlinkMode === 'auto') {
-        const slRes = await axios.post<{ shortCode: string }>('/api/admin/shortlinks', { sessionId });
-        const link = `${protocol}//${hostname}/s/${slRes.data.shortCode}`;
+      if (res.data.shortCode) {
+        const link = `${protocol}//${hostname}/s/${res.data.shortCode}`;
         await navigator.clipboard.writeText(link).catch(() => {});
-        successMessage = `Session created! Link (/s/${slRes.data.shortCode}) copied to clipboard.`;
-      } else if (formData.shortlinkMode === 'custom' && formData.customShortCode.trim()) {
-        const slRes = await axios.post<{ shortCode: string }>('/api/admin/shortlinks', { sessionId, shortCode: formData.customShortCode.trim() });
-        const link = `${protocol}//${hostname}/s/${slRes.data.shortCode}`;
-        await navigator.clipboard.writeText(link).catch(() => {});
-        successMessage = `Session created! Link (/s/${slRes.data.shortCode}) copied to clipboard.`;
-      } else if (formData.shortlinkMode === 'existing' && formData.existingShortCode) {
-        await axios.post(`/api/admin/shortlinks/${formData.existingShortCode}/attach`, { sessionId, force: true });
-        const link = `${protocol}//${hostname}/s/${formData.existingShortCode}`;
-        await navigator.clipboard.writeText(link).catch(() => {});
-        successMessage = `Session created! Link (/s/${formData.existingShortCode}) copied to clipboard.`;
+        successMessage = `Session created! Link (/s/${res.data.shortCode}) copied to clipboard.`;
       }
 
       toast.success(successMessage);
@@ -174,8 +157,8 @@ const Sessions = () => {
       setFormData({ locationId: '', durationMinutes: 30, description: '', shortlinkMode: 'auto', customShortCode: '', existingShortCode: '', batchId: '' });
       fetchData();
     } catch (error) {
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || 'Failed to create session');
+      const err = error as { response?: { data?: { message?: string; error?: string } } };
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to create session');
     }
   };
 
@@ -204,7 +187,7 @@ const Sessions = () => {
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [sessions]);
 
   const columns: Column<Session>[] = [
-    { key: 'location', label: 'Location',   width: '22%', render: (s) => s.locationId?.name || 'Unknown' },
+    { key: 'location', label: 'Location',   width: '22%', render: (s) => getLocationName(s) },
     { key: 'status',   label: 'Status',     width: '14%', render: (s) => { const st = getStatus(s); return <Badge tone={st.tone}>{st.label}</Badge>; }},
     { key: 'expires',  label: 'Expires At', width: '20%', render: (s) => new Date(s.expiresAt).toLocaleString() },
     { key: 'students', label: 'Students',   width: '12%', align: 'center', render: (s) => s.attendanceCount },
@@ -212,7 +195,7 @@ const Sessions = () => {
       <div className="actions-cell">
         <Link to={`/sessions/${s._id}`} className="btn btn-secondary btn-small">View</Link>
         {s.isActive && !isExpired(s) && <Button variant="danger" size="sm" onClick={() => setDeactivateId(s._id)}>Deactivate</Button>}
-        <Button variant="delete" size="sm" onClick={() => { setDeleteModal({ open: true, sessionId: s._id, attendanceCount: s.attendanceCount, locationName: s.locationId?.name || 'Unknown' }); setDeletePassword(''); }}>Delete</Button>
+        <Button variant="delete" size="sm" onClick={() => { setDeleteModal({ open: true, sessionId: s._id, attendanceCount: s.attendanceCount, locationName: getLocationName(s) }); setDeletePassword(''); }}>Delete</Button>
       </div>
     )},
   ];

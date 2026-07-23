@@ -45,7 +45,14 @@ const ShortLinks = () => {
         axios.get<{ shortLinks: ShortLink[] }>('/api/admin/shortlinks'),
         axios.get<Session[]>('/api/admin/sessions'),
       ]);
-      setShortLinks(linksRes.data.shortLinks);
+      const mappedLinks = linksRes.data.shortLinks.map(link => {
+        if (typeof link.sessionId === 'string') {
+          const session = sessionsRes.data.find(s => s._id === link.sessionId);
+          return { ...link, sessionId: session || link.sessionId };
+        }
+        return link;
+      });
+      setShortLinks(mappedLinks as unknown as ShortLink[]);
       setSessions(sessionsRes.data);
     } catch { toast.error('Failed to fetch data'); }
     finally { setLoading(false); }
@@ -193,7 +200,7 @@ const ShortLinks = () => {
             <label htmlFor="sessionId">Attach to Session (optional)</label>
             <select id="sessionId" value={formData.sessionId} onChange={(e) => setFormData({ ...formData, sessionId: e.target.value })}>
               <option value="">Create without attaching</option>
-              {activeSessions.map((s) => <option key={s._id} value={s._id}>{s.description || 'Session'} - {s.locationId?.name || 'Unknown'}</option>)}
+              {activeSessions.map((s) => <option key={s._id} value={s._id}>{s.description || 'Session'} - {s.locationName || (typeof s.locationId === 'object' ? s.locationId?.name : undefined) || 'Unknown'}</option>)}
             </select>
           </div>
           <div className="form-actions">

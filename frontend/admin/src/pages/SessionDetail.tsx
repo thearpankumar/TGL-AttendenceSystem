@@ -15,7 +15,8 @@ interface Session {
   expiresAt: string;
   rotationCount: number;
   totpEnabled?: boolean;
-  locationId?: { name: string };
+  locationId?: { name: string } | string;
+  locationName?: string;
   description?: string;
   batchId?: { _id: string; name: string };
   createdAt?: string;
@@ -377,7 +378,7 @@ const SessionDetail = () => {
               <span className="detail-label">
                 <MapPin size={14} /> Location:
               </span>
-              <span className="detail-value">{session.locationId?.name || 'Unknown'}</span>
+              <span className="detail-value">{session.locationName || (typeof session.locationId === 'object' ? session.locationId?.name : undefined) || 'Unknown'}</span>
             </div>
             <div className="session-detail-item">
               <span className="detail-label">

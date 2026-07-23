@@ -20,6 +20,7 @@ const detectPrivacyOs = (): boolean => {
 };
 
 interface SessionInfo { locationName: string; expiresAt: string; }
+interface StorageInfo { provider: string; supportsDirectUpload: boolean; }
 
 
 const toB64url = (buf: ArrayBuffer) =>
@@ -96,6 +97,7 @@ export default function StudentScan() {
   const [errMsg, setErrMsg] = useState('');
   const [flashMsg, setFlashMsg] = useState<{ text: React.ReactNode; ok: boolean } | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [devBypassEnabled, setDevBypassEnabled] = useState(false);
   const { isMobile, isEmulation, inconsistencies, checking } = useMobileVerification();
   const { ready: faceReady, detectFace } = useFaceDetection();
@@ -173,10 +175,15 @@ export default function StudentScan() {
     initAbortRef.current = ac;
     (async () => {
       try {
-        const res = await fetch(`${API}/s/${shortCode}/session`, { signal: ac.signal });
-        if (!res.ok) throw new Error('Session not found or inactive');
-        const data = await res.json();
+        const [storRes, sessRes] = await Promise.all([
+          fetch(`${API}/api/storage-info`, { signal: ac.signal }),
+          fetch(`${API}/s/${shortCode}/session`, { signal: ac.signal }),
+        ]);
+        const stor: StorageInfo = await storRes.json();
+        if (!sessRes.ok) throw new Error('Session not found or inactive');
+        const data = await sessRes.json();
         if (ac.signal.aborted) return;
+        setStorageInfo(stor);
         setSession({ locationName: data.session.locationName, expiresAt: data.session.expiresAt });
         const bypass = !!data.devBypassEnabled;
         setDevBypassEnabled(bypass);
@@ -637,32 +644,70 @@ export default function StudentScan() {
         ? `${API}/s/${shortCode}/webauthn/authenticate/finish`
         : `${API}/s/${shortCode}/submit`;
 
-      const body: Record<string, unknown> = {
-        studentName: studentName.trim(),
-        rollNumber: rollRef.current,
-        photo: photoDataRef.current,
-        latitude: locData?.latitude,
-        longitude: locData?.longitude,
-        faceDetected: faceDetectedRef.current,
-        captchaAnswer: captchaAnswer.trim(),
-        captchaId,
-        deviceFingerprint: fingerRef.current,
-        webauthnVerified,
-        devBypassCamera: usedDevBypassCamera,
-        devBypassGps: usedDevBypassGps,
-        devBypassWebauthn: devBypassEnabled && !credentialRef.current,
-        gpsMetadata,
-        deviceMetrics,
-        integrityChecks,
-        emulatorFlags: deviceMetrics?.inconsistencies?.map((inc: string) => ({
-          type: 'CLIENT_DETECTED',
-          severity: 'medium',
-          details: inc,
-        })) || [],
-      };
-      if (credentialRef.current) body.credential = credentialRef.current;
+      let finalBody: Record<string, unknown>;
 
-      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (photoDataRef.current && storageInfo?.provider === 's3' && storageInfo.supportsDirectUpload && !usedDevBypassCamera) {
+        const urlRes = await fetch(`${API}/s/${shortCode}/upload-url`);
+        const urlData = await urlRes.json();
+        if (!urlRes.ok) throw new Error(urlData.message || 'Failed to get upload URL');
+        
+        const blob = await (await fetch(photoDataRef.current)).blob();
+        const upRes = await fetch(urlData.uploadUrl, { method: urlData.method, headers: urlData.headers || {}, body: blob });
+        if (!upRes.ok) throw new Error('Photo upload failed');
+        
+        finalBody = {
+          studentName: studentName.trim(),
+          rollNumber: rollRef.current,
+          directUpload: true,
+          photoPublicId: urlData.publicId,
+          latitude: locData?.latitude,
+          longitude: locData?.longitude,
+          faceDetected: faceDetectedRef.current,
+          captchaAnswer: captchaAnswer.trim(),
+          captchaId,
+          deviceFingerprint: fingerRef.current,
+          webauthnVerified,
+          devBypassCamera: usedDevBypassCamera,
+          devBypassGps: usedDevBypassGps,
+          devBypassWebauthn: devBypassEnabled && !credentialRef.current,
+          gpsMetadata,
+          deviceMetrics,
+          integrityChecks,
+          emulatorFlags: deviceMetrics?.inconsistencies?.map((inc: string) => ({
+            type: 'CLIENT_DETECTED',
+            severity: 'medium',
+            details: inc,
+          })) || [],
+        };
+      } else {
+        finalBody = {
+          studentName: studentName.trim(),
+          rollNumber: rollRef.current,
+          photo: photoDataRef.current,
+          latitude: locData?.latitude,
+          longitude: locData?.longitude,
+          faceDetected: faceDetectedRef.current,
+          captchaAnswer: captchaAnswer.trim(),
+          captchaId,
+          deviceFingerprint: fingerRef.current,
+          webauthnVerified,
+          devBypassCamera: usedDevBypassCamera,
+          devBypassGps: usedDevBypassGps,
+          devBypassWebauthn: devBypassEnabled && !credentialRef.current,
+          gpsMetadata,
+          deviceMetrics,
+          integrityChecks,
+          emulatorFlags: deviceMetrics?.inconsistencies?.map((inc: string) => ({
+            type: 'CLIENT_DETECTED',
+            severity: 'medium',
+            details: inc,
+          })) || [],
+        };
+      }
+      
+      if (credentialRef.current) finalBody.credential = credentialRef.current;
+
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalBody) });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || 'Failed to submit');
       setStep('success');

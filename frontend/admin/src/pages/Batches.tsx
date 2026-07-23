@@ -97,10 +97,12 @@ const Batches = () => {
     const validTypes = [
       'text/csv',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel'
+      'application/vnd.ms-excel',
+      'application/vnd.oasis.opendocument.spreadsheet'
     ];
-    if (!validTypes.includes(file.type) && !file.name.endsWith('.csv') && !file.name.endsWith('.xlsx')) {
-      toast.error('Please upload a valid .csv or .xlsx file');
+    const nameLower = file.name.toLowerCase();
+    if (!validTypes.includes(file.type) && !nameLower.endsWith('.csv') && !nameLower.endsWith('.xlsx') && !nameLower.endsWith('.xls') && !nameLower.endsWith('.ods')) {
+      toast.error('Please upload a valid .csv, .xlsx, .xls, or .ods file');
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -310,7 +312,7 @@ const Batches = () => {
                         <Upload size={32} className="text-muted" />
                         <p>Drag & drop your file here, or click to browse</p>
                         <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                          Requires columns: Name, Roll Number
+                          Supports: Roll / Reg No, Student Name (any column order)
                         </span>
                       </>
                     )}
